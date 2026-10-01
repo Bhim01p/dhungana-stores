@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Environment variables - NEVER commit real secrets
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+build/
+
+# Test coverage
+coverage/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Prisma generated client (regenerated via prisma generate)
+# backend/node_modules/@prisma/client is covered by node_modules above
