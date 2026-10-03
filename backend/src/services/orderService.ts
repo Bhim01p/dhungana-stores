@@ -21,6 +21,7 @@ export interface CreateOrderInput {
   notes?: string;
   items: CartItemInput[];
   customerId?: string;
+  paymentMethodId?: string;
 }
 
 // ─── Helpers ──────────────────────────────────
@@ -78,6 +79,13 @@ export const orderService = {
     const guestLookupToken = input.customerId ? undefined : randomBytes(32).toString('base64url');
     // Reserve stock and create the order atomically to prevent overselling.
     const created = await prisma.$transaction(async (tx) => {
+      const paymentMethod = input.paymentMethodId
+        ? await tx.paymentMethod.findFirst({ where: { id: input.paymentMethodId, active: true } })
+        : null;
+      if (input.paymentMethodId && !paymentMethod) {
+        throw Object.assign(new Error('That payment method is no longer available. Choose another method and try again.'), { statusCode: 400 });
+      }
+
       const products = await tx.product.findMany({
         where: { id: { in: orderItems.map((item) => item.productId) }, active: true },
       });
@@ -121,6 +129,9 @@ export const orderService = {
           subtotal: new Decimal(subtotal),
           deliveryCharge: new Decimal(deliveryCharge),
           total: new Decimal(total),
+          paymentMethodName: paymentMethod?.name ?? null,
+          paymentMethodQrImageUrl: paymentMethod?.qrImageUrl ?? null,
+          paymentMethodAccountInfo: paymentMethod?.accountInfo ?? null,
           customerId: input.customerId || null,
           guestLookupTokenHash: guestLookupToken ? hashLookupToken(guestLookupToken) : null,
           stockReserved: true,

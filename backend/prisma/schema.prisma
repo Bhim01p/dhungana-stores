@@ -65,8 +65,22 @@ model AdminUser {
   active    Boolean   @default(true)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  loginChallenges AdminLoginChallenge[]
 
   @@map("admin_users")
+}
+
+model AdminLoginChallenge {
+  id          String   @id
+  adminUserId String   @map("admin_user_id")
+  codeHash    String   @map("code_hash")
+  attempts    Int      @default(0)
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId, expiresAt])
+  @@map("admin_login_challenges")
 }
 
 // ---------------------------------------------
@@ -110,6 +124,7 @@ model Category {
   name        String    @unique
   slug        String    @unique
   description String?
+  imageUrl    String?   @map("image_url")
   active      Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -172,6 +187,9 @@ model Order {
   total          Decimal       @db.Decimal(10, 2)
   paymentStatus  PaymentStatus @default(PENDING)
   orderStatus    OrderStatus   @default(PENDING)
+  paymentMethodName         String? @map("payment_method_name")
+  paymentMethodQrImageUrl   String? @map("payment_method_qr_image_url")
+  paymentMethodAccountInfo  String? @map("payment_method_account_info")
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 

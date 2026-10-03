@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import prisma from '../config/prisma';
 import { verifyPassword, signToken, hashPassword } from '../services/authService';
 import { completePasswordReset, requestPasswordReset } from '../services/passwordResetService';
+import { consumeAdminLoginCode, sendAdminLoginCode } from '../services/adminLoginCodeService';
+import { env } from '../config/env';
 
 // POST /api/auth/login
 export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -26,15 +28,35 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
       return;
     }
 
-    const token = signToken({ sub: admin.id, username: admin.username, role: admin.role });
-
-    res.status(200).json({
-      token,
-      admin: { id: admin.id, username: admin.username, role: admin.role },
-    });
+    const destination = admin.role === 'ADMIN' ? env.OWNER_ADMIN_EMAIL : admin.recoveryEmail;
+    if (!destination) {
+      res.status(503).json({ error: 'This staff account has no sign-in email. Ask the store owner to update the account.' });
+      return;
+    }
+    const challenge = await sendAdminLoginCode(admin.id, destination);
+    res.status(200).json({ requiresCode: true, ...challenge });
   } catch (err) {
     next(err);
   }
+}
+
+// POST /api/auth/verify-login-code
+export async function verifyLoginCode(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { challengeId, code } = req.body as { challengeId?: string; code?: string };
+    if (!challengeId || !/^[0-9]{6}$/.test(code ?? '')) {
+      res.status(400).json({ error: 'Enter the 6-digit code from your email.' });
+      return;
+    }
+    const adminId = await consumeAdminLoginCode(challengeId, code!);
+    const admin = await prisma.adminUser.findUnique({ where: { id: adminId } });
+    if (!admin || !admin.active) {
+      res.status(401).json({ error: 'This account is inactive. Ask the store owner for access.' });
+      return;
+    }
+    const token = signToken({ sub: admin.id, username: admin.username, role: admin.role });
+    res.status(200).json({ token, admin: { id: admin.id, username: admin.username, role: admin.role } });
+  } catch (err) { next(err); }
 }
 
 // GET /api/auth/me
@@ -90,6 +112,10 @@ export async function updateRecoveryEmail(req: Request, res: Response, next: Nex
     const email = (req.body as { email?: string }).email?.trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       res.status(400).json({ error: 'Enter a valid recovery email address.' });
+      return;
+    }
+    if (req.admin!.role === 'ADMIN' && email !== env.OWNER_ADMIN_EMAIL) {
+      res.status(400).json({ error: `The main admin email is fixed to ${env.OWNER_ADMIN_EMAIL}.` });
       return;
     }
     const admin = await prisma.adminUser.update({ where: { id: req.admin!.sub }, data: { recoveryEmail: email }, select: { id: true, username: true, recoveryEmail: true, role: true } });

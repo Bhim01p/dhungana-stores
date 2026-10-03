@@ -15,4 +15,6 @@ export const adminStaffApi = {
     adminClient.post<StaffAccount>("/admin/staff", data, token),
   setActive: (token: string, id: string, active: boolean) =>
     adminClient.patch<StaffAccount>(`/admin/staff/${id}`, { active }, token),
+  delete: (token: string, id: string) =>
+    adminClient.delete<void>(`/admin/staff/${id}`, token),
 };

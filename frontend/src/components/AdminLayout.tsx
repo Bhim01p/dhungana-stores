@@ -4,13 +4,13 @@ import { useAuth } from "../contexts/AuthContext";
 import { getStorefrontUrl } from "../utils/siteUrls";
 
 const sidebarItems = [
-  { to: "/admin/dashboard",        label: "Dashboard",        icon: "📊", adminOnly: true },
-  { to: "/admin/products",         label: "Products",         icon: "🛒", adminOnly: true },
-  { to: "/admin/categories",       label: "Categories",       icon: "📂", adminOnly: true },
-  { to: "/admin/orders",           label: "Orders",           icon: "📦", adminOnly: false },
-  { to: "/admin/account",          label: "My Account",       icon: "🔐", adminOnly: false },
-  { to: "/admin/payment-methods",  label: "Payment Methods",  icon: "💳", adminOnly: true },
-  { to: "/admin/staff",            label: "Staff Access",     icon: "👥", adminOnly: true },
+  { to: "/staff/dashboard",        label: "Dashboard",        icon: "📊", adminOnly: true },
+  { to: "/staff/products",         label: "Products",         icon: "🛒", adminOnly: true },
+  { to: "/staff/categories",       label: "Categories",       icon: "📂", adminOnly: true },
+  { to: "/staff/orders",           label: "Orders",           icon: "📦", adminOnly: false },
+  { to: "/staff/account",          label: "My Account",       icon: "🔐", adminOnly: false },
+  { to: "/staff/payment-methods",  label: "Payment Methods",  icon: "💳", adminOnly: true },
+  { to: "/staff/staff",            label: "Staff Access",     icon: "👥", adminOnly: true },
 ];
 
 export default function AdminLayout() {

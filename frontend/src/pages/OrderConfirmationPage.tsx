@@ -50,7 +50,7 @@ export default function OrderConfirmationPage() {
           <h2 className="font-bold text-gray-900 mb-3">What happens next?</h2>
           <div className="space-y-3">
             {[
-              { step: "1", icon: "📱", text: "We verify your payment and confirm the order" },
+              { step: "1", icon: "📱", text: order.paymentStatus === "CONFIRMED" ? "Payment received; we are preparing your order" : "We will confirm the order and payment with you" },
               { step: "2", icon: "📦", text: "Your order is prepared and packed" },
               { step: "3", icon: "🚚", text: "Delivery to your address" },
             ].map(({ step, icon, text }) => (
@@ -80,10 +80,17 @@ export default function OrderConfirmationPage() {
             </span>
           </div>
           <div className="flex justify-between font-bold text-base text-gray-900 pt-2 border-t border-gray-100">
-            <span>Total Paid</span>
+            <span>Order total</span>
             <span className="text-brand-600">NPR {Number(order.total).toLocaleString("en-NP")}</span>
           </div>
         </div>
+
+        {order.paymentStatus === "PENDING" && (
+          <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900">
+            <p className="font-semibold">Payment is still pending.</p>
+            {order.paymentMethodName ? <p className="mt-1">Selected method: {order.paymentMethodName}{order.paymentMethodAccountInfo ? ` · ${order.paymentMethodAccountInfo}` : ""}</p> : <p className="mt-1">The store will contact you to arrange payment.</p>}
+          </div>
+        )}
 
         {/* Delivery info */}
         <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600 space-y-1">

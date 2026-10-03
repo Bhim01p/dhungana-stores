@@ -5,7 +5,7 @@ import { customerService } from "../services/customerService";
 // POST /api/orders
 export async function createOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { customerName, phone, email, address, landmark, notes, items } = req.body as {
+    const { customerName, phone, email, address, landmark, notes, items, paymentMethodId } = req.body as {
       customerName?: string;
       phone?: string;
       email?: string;
@@ -13,6 +13,7 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
       landmark?: string;
       notes?: string;
       items?: Array<{ productId: string; quantity: number }>;
+      paymentMethodId?: string;
     };
 
     let resolvedName = customerName;
@@ -35,6 +36,9 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
     if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ error: "At least one item is required." }); return;
     }
+    if (paymentMethodId !== undefined && (typeof paymentMethodId !== 'string' || !paymentMethodId.trim())) {
+      res.status(400).json({ error: "Choose a valid payment method." }); return;
+    }
 
     const order = await orderService.create({
       customerName: resolvedName,
@@ -45,6 +49,7 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
       notes,
       items,
       customerId,
+      paymentMethodId,
     });
     res.status(201).json(order);
   } catch (err) { next(err); }
@@ -63,6 +68,9 @@ export async function getGuestOrder(req: Request, res: Response, next: NextFunct
       customerName: order.customerName,
       orderStatus: order.orderStatus,
       paymentStatus: order.paymentStatus,
+      paymentMethodName: order.paymentMethodName,
+      paymentMethodQrImageUrl: order.paymentMethodQrImageUrl,
+      paymentMethodAccountInfo: order.paymentMethodAccountInfo,
       address: order.address,
       landmark: order.landmark,
       subtotal: order.subtotal,

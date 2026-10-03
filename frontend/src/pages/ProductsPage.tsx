@@ -13,6 +13,19 @@ const LIMIT = 12;
 
 type SortKey = 'name_asc' | 'name_desc' | 'price_asc' | 'price_desc';
 
+function CategoryThumbnail({ category, compact = false }: { category: Category; compact?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [category.imageUrl]);
+  const size = compact ? "h-8 w-8" : "h-10 w-10";
+  return (
+    <span className={`${size} flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-50 text-xl`} aria-hidden="true">
+      {category.imageUrl && !failed
+        ? <img src={category.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover" onError={() => setFailed(true)} />
+        : getCategoryIcon(category.slug, category.name)}
+    </span>
+  );
+}
+
 function sortProducts(products: Product[], sort: SortKey): Product[] {
   return [...products].sort((a, b) => {
     switch (sort) {
@@ -115,9 +128,6 @@ export default function ProductsPage() {
     ? categories.find((category) => category.id === selectedCategory.parentId)
     : selectedCategory;
   const rootCategories = categories.filter((category) => !category.parentId);
-  const productCount = (category: Category) => (category._count?.products ?? 0) +
-    (category.children ?? []).reduce((sum, child) => sum + (child._count?.products ?? 0), 0);
-
   // ── Pagination helpers ────────────────────────────────
   function pageNumbers(): (number | '…')[] {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -135,9 +145,7 @@ export default function ProductsPage() {
 
         {/* ── Sidebar ───────────────────────────────── */}
         <aside className="w-full shrink-0 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm lg:sticky lg:top-24 lg:h-fit lg:w-60">
-          <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">
-            Shop by category
-          </h2>
+          <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">Shop by category</h2>
           <nav className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-0">
             <button
               onClick={() => setCategory(undefined)}
@@ -145,11 +153,8 @@ export default function ProductsPage() {
                 !categorySlug ? 'border-brand-100 bg-brand-50 text-brand-700' : 'border-stone-200 text-stone-600 hover:border-stone-300 hover:bg-stone-50'
               }`}
             >
-                <span aria-hidden="true">🧺</span>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-xl" aria-hidden="true">🧺</span>
               <span>All Products</span>
-              {!categorySlug && total > 0 && (
-                <span className="ml-auto text-xs text-brand-400">{total}</span>
-              )}
             </button>
 
             {rootCategories.map((cat) => (
@@ -162,9 +167,8 @@ export default function ProductsPage() {
                     : 'border-stone-200 text-stone-600 hover:border-stone-300 hover:bg-stone-50'
                 }`}
               >
-                <span>{getCategoryIcon(cat.slug, cat.name)}</span>
+                <CategoryThumbnail category={cat} />
                 <span className="truncate flex-1">{cat.name}</span>
-                <span className="ml-auto shrink-0 text-xs text-gray-400">{productCount(cat)}</span>
               </button>
             ))}
           </nav>
@@ -181,7 +185,7 @@ export default function ProductsPage() {
                     key={child.id}
                     onClick={() => setCategory(child.slug)}
                     className={`shrink-0 rounded-full px-3 py-2 text-left text-xs font-semibold transition-colors lg:w-full lg:rounded-lg ${categorySlug === child.slug ? 'bg-brand-50 text-brand-700' : 'text-stone-500 hover:bg-stone-50 hover:text-stone-800'}`}
-                  >{child.name} <span className="ml-1 text-stone-400">{child._count?.products ?? 0}</span></button>
+                  ><span className="flex items-center gap-2"><CategoryThumbnail category={child} compact /><span>{child.name}</span></span></button>
                 ))}
               </div>
             </div>

@@ -73,3 +73,23 @@ export async function setStaffActive(req: Request, res: Response, next: NextFunc
     res.status(200).json(updated);
   } catch (err) { next(err); }
 }
+
+export async function deleteStaff(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const staff = await prisma.adminUser.findUnique({ where: { id: String(req.params.id) } });
+    if (!staff || staff.role !== AdminRole.STAFF) {
+      res.status(404).json({ error: 'Staff account not found.' });
+      return;
+    }
+    if (staff.active) {
+      res.status(400).json({ error: 'Disable this staff account before deleting it.' });
+      return;
+    }
+
+    await prisma.$transaction([
+      prisma.passwordResetToken.deleteMany({ where: { accountType: 'ADMIN', accountId: staff.id } }),
+      prisma.adminUser.delete({ where: { id: staff.id } }),
+    ]);
+    res.status(200).json({ message: 'Staff account permanently deleted.' });
+  } catch (err) { next(err); }
+}

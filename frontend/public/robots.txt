@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /staff-login
+Disallow: /checkout
+Disallow: /orders
+Disallow: /profile
+Disallow: /reset-password
+
+Sitemap: https://dhungana-stores.vercel.app/sitemap.xml

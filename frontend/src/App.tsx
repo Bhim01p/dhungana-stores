@@ -20,7 +20,6 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import HomePage from "./pages/HomePage";
 import ProductsPage from "./pages/ProductsPage";
 import ProductDetailPage from "./pages/ProductDetailPage";
-import CategoriesPage from "./pages/CategoriesPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import OrderConfirmationPage from "./pages/OrderConfirmationPage";
 import CustomerLoginPage from "./pages/CustomerLoginPage";
@@ -34,18 +33,18 @@ import { getStaffPortalUrl, isStaffPortalHost } from "./utils/siteUrls";
 function AdminProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return <Spinner />;
-  if (!user) return <Navigate to="/admin/login" replace />;
+  if (!user) return <Navigate to="/staff-login" replace />;
   return <>{children}</>;
 }
 
 function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  return user?.role === "ADMIN" ? <>{children}</> : <Navigate to="/admin/orders" replace />;
+  return user?.role === "ADMIN" ? <>{children}</> : <Navigate to="/staff/orders" replace />;
 }
 
 function AdminHome() {
   const { user } = useAuth();
-  return <Navigate to={user?.role === "ADMIN" ? "/admin/dashboard" : "/admin/orders"} replace />;
+  return <Navigate to={user?.role === "ADMIN" ? "/staff/dashboard" : "/staff/orders"} replace />;
 }
 
 // ── Floating cart button ───────────────────────────────────
@@ -149,7 +148,7 @@ export default function App() {
             <Route path="/"                    element={<StoreHomePage />} />
             <Route path="/products"            element={<StoreLayout><ProductsPage /></StoreLayout>} />
             <Route path="/products/:slug"      element={<StoreLayout><ProductDetailPage /></StoreLayout>} />
-            <Route path="/categories"          element={<StoreLayout><CategoriesPage /></StoreLayout>} />
+            <Route path="/categories"          element={<Navigate to="/products" replace />} />
             <Route path="/checkout"            element={<StoreLayout><CheckoutPage /></StoreLayout>} />
             <Route path="/order-confirmation"  element={<StoreLayout><OrderConfirmationPage /></StoreLayout>} />
             <Route path="/orders"              element={<StoreLayout><OrdersPage /></StoreLayout>} />
@@ -160,14 +159,18 @@ export default function App() {
             <Route path="/signup"              element={<CustomerSignupPage />} />
             <Route path="/forgot-password"     element={<ForgotPasswordPage accountType="customer" />} />
             <Route path="/reset-password"      element={<PasswordResetRoute />} />
-            <Route path="/admin/forgot-password" element={<StaffDomainOnly><ForgotPasswordPage accountType="admin" /></StaffDomainOnly>} />
+            <Route path="/staff-recovery" element={<StaffDomainOnly><ForgotPasswordPage accountType="admin" /></StaffDomainOnly>} />
+            <Route path="/admin/forgot-password" element={<NotFoundPage />} />
+            <Route path="/admin"               element={<NotFoundPage />} />
 
             {/* 404 */}
             <Route path="*"                    element={<NotFoundPage />} />
 
             {/* Admin routes */}
-            <Route path="/admin/login"         element={<StaffDomainOnly><AdminLoginPage /></StaffDomainOnly>} />
-            <Route path="/admin"               element={<StaffDomainOnly><AdminProtectedRoute><AdminLayout /></AdminProtectedRoute></StaffDomainOnly>}>
+            <Route path="/staff-login"         element={<StaffDomainOnly><AdminLoginPage /></StaffDomainOnly>} />
+            <Route path="/admin/login"         element={<NotFoundPage />} />
+            <Route path="/admin/*"             element={<NotFoundPage />} />
+            <Route path="/staff"               element={<StaffDomainOnly><AdminProtectedRoute><AdminLayout /></AdminProtectedRoute></StaffDomainOnly>}>
               <Route index                     element={<AdminHome />} />
               <Route path="dashboard"         element={<AdminOnlyRoute><AdminDashboardPage /></AdminOnlyRoute>} />
               <Route path="products"           element={<AdminOnlyRoute><AdminProductsPage /></AdminOnlyRoute>} />

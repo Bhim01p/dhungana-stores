@@ -109,11 +109,20 @@ export default function AdminProductsPage() {
     const action = product.active ? "Deactivate" : "Activate";
     if (!confirm(`${action} ${product.name}?`)) return;
     try {
-      if (product.active) await adminProductsApi.delete(token, product.id);
+      if (product.active) await adminProductsApi.update(token, product.id, { active: false });
       else await adminProductsApi.update(token, product.id, { active: true });
       await fetchProducts();
     }
     catch (err: any) { setError(err.message); }
+  };
+
+  const handleDelete = async (product: Product) => {
+    if (!token || product.active) return;
+    if (!confirm(`Permanently delete “${product.name}”? This cannot be undone. Past order bills keep the saved item name and price.`)) return;
+    try {
+      await adminProductsApi.delete(token, product.id);
+      await fetchProducts();
+    } catch (err: any) { setError(err.message); }
   };
 
   if (loading) return <LoadingSpinner message="Loading products..." />;
@@ -125,6 +134,7 @@ export default function AdminProductsPage() {
           <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">Inventory</p>
           <h1 className="text-2xl font-bold text-gray-900">Products</h1>
           <p className="text-gray-500 mt-0.5">{totalCount} matching products</p>
+          <p className="mt-1 text-xs text-gray-400">Deactivate a product first. Archived products can be permanently deleted.</p>
         </div>
         <button onClick={() => { resetForm(); setShowForm(true); }} className="btn-primary">
           + Add Product
@@ -306,6 +316,7 @@ export default function AdminProductsPage() {
                     <td className="px-6 py-3 text-right space-x-3">
                       <button onClick={() => handleEdit(p)} className="text-blue-500 hover:text-blue-700 text-sm font-medium">Edit</button>
                       <button onClick={() => handleToggleActive(p)} className={p.active ? "text-red-500 hover:text-red-700 text-sm font-medium" : "text-green-700 hover:text-green-900 text-sm font-medium"}>{p.active ? "Deactivate" : "Activate"}</button>
+                      {!p.active && <button onClick={() => void handleDelete(p)} className="text-red-700 hover:text-red-900 text-sm font-semibold">Delete</button>}
                     </td>
                   </tr>
                 ))}

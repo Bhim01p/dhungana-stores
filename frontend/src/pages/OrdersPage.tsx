@@ -2,8 +2,8 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCustomerAuth } from "../contexts/CustomerAuthContext";
 import { customersApi } from "../api/customers";
-import { paymentMethodsApi } from "../api/paymentMethods";
-import type { Order, PaymentMethod } from "../types";
+import type { Order } from "../types";
+import PaymentQrImage from "../components/PaymentQrImage";
 import LoadingSpinner from "../components/LoadingSpinner";
 import ErrorMessage from "../components/ErrorMessage";
 
@@ -64,19 +64,7 @@ function OrderStatusTracker({ status }: { status: string }) {
   );
 }
 
-function PaymentQRSection({ paymentMethods }: { paymentMethods: PaymentMethod[] }) {
-  const [selected, setSelected] = useState(0);
-  const method = paymentMethods[selected];
-
-  const saveQR = () => {
-    const link = document.createElement("a");
-    link.href = method.qrImageUrl;
-    link.download = `PaymentQR-${new Date().toISOString().slice(0,10)}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
+function PaymentQRSection({ order }: { order: Order }) {
   return (
     <div className="bg-brand-50 border border-brand-200 rounded-xl p-5 space-y-4">
       <div className="flex items-center gap-2">
@@ -84,57 +72,7 @@ function PaymentQRSection({ paymentMethods }: { paymentMethods: PaymentMethod[] 
         <p className="font-semibold text-brand-800">Payment Required</p>
         <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium">Pending</span>
       </div>
-      <p className="text-sm text-brand-700">
-        Scan the QR code below to complete your payment.
-      </p>
-
-      {paymentMethods.length > 1 && (
-        <div className="flex gap-2 flex-wrap">
-          {paymentMethods.map((m, i) => (
-            <button key={m.id} onClick={() => setSelected(i)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
-                i === selected ? "bg-brand-500 text-white border-brand-500" : "bg-white text-gray-600 border-gray-300 hover:border-brand-400"
-              }`}>
-              {m.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {method ? (
-        <div className="flex flex-col items-center gap-3 bg-white rounded-xl p-4 border border-brand-100">
-          <p className="text-sm font-bold text-gray-800">{method.name}</p>
-          <img
-            src={method.qrImageUrl}
-            alt={`${method.name} QR`}
-            className="w-44 h-44 object-contain rounded-lg border border-gray-200 bg-white p-2"
-            onError={e => { (e.target as HTMLImageElement).src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=BishnuAndDhunganaStores&bgcolor=ffffff"; }}
-          />
-          {method.accountInfo && (
-            <p className="text-sm text-gray-600 text-center">
-              Account: <span className="font-bold text-gray-900">{method.accountInfo}</span>
-            </p>
-          )}
-          <div className="flex gap-3">
-            <button onClick={saveQR} className="btn-secondary text-xs py-2 px-3">
-              📸 Save QR
-            </button>
-            <a href={method.qrImageUrl} target="_blank" rel="noopener noreferrer"
-              className="btn-secondary text-xs py-2 px-3">
-              🔗 Open in New Tab
-            </a>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-3 bg-white rounded-xl p-4 border border-brand-100">
-          <img
-            src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=BishnuAndDhunganaStores&bgcolor=ffffff"
-            alt="Payment QR"
-            className="w-44 h-44 object-contain rounded-lg border border-gray-200 bg-white p-2"
-          />
-          <p className="text-xs text-gray-500 text-center">Contact us for payment details</p>
-        </div>
-      )}
+      {order.paymentMethodName ? <PaymentQrImage url={order.paymentMethodQrImageUrl} name={order.paymentMethodName} amount={Number(order.total)} accountInfo={order.paymentMethodAccountInfo} /> : <p className="text-sm text-brand-700">No payment method was saved for this order. Contact the store to arrange payment.</p>}
       <p className="text-xs text-brand-600 text-center">After payment, your order will be confirmed manually.</p>
     </div>
   );
@@ -144,7 +82,6 @@ export default function OrdersPage() {
   const { customerToken, isCustomerLoading } = useCustomerAuth();
   const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
@@ -155,11 +92,8 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (!customerToken) return;
-    Promise.all([
-      customersApi.getOrders(customerToken),
-      paymentMethodsApi.getAll(),
-    ])
-      .then(([ordersRes, pmRes]) => { setOrders(ordersRes); setPaymentMethods(pmRes); })
+    customersApi.getOrders(customerToken)
+      .then((ordersRes) => { setOrders(ordersRes); })
       .catch(err => setOrdersError(err.message))
       .finally(() => setLoadingOrders(false));
   }, [customerToken]);
@@ -220,7 +154,7 @@ export default function OrdersPage() {
 
                   {/* QR payment — show only if payment not confirmed */}
                   {order.paymentStatus === "PENDING" && (
-                    <PaymentQRSection paymentMethods={paymentMethods} />
+                    <PaymentQRSection order={order} />
                   )}
 
                   {/* Items */}

@@ -29,10 +29,14 @@ export async function requestPasswordReset(type: ResetAccountType, email: string
   }
   const account = type === 'CUSTOMER'
     ? await prisma.customer.findUnique({ where: { email: normalizedEmail }, select: { id: true, active: true, email: true } })
-    : await prisma.adminUser.findFirst({ where: { recoveryEmail: { equals: normalizedEmail, mode: 'insensitive' } }, select: { id: true, active: true, recoveryEmail: true } });
+    : await prisma.adminUser.findFirst({ where: { recoveryEmail: { equals: normalizedEmail, mode: 'insensitive' } }, select: { id: true, active: true, recoveryEmail: true, role: true } });
 
   if (!account || !account.active) return;
-  const destination = type === 'CUSTOMER' ? (account as { email: string }).email : (account as { recoveryEmail: string }).recoveryEmail;
+  const destination = type === 'CUSTOMER'
+    ? (account as { email: string }).email
+    : (account as { recoveryEmail: string | null; role: string }).role === 'ADMIN'
+      ? env.OWNER_ADMIN_EMAIL
+      : (account as { recoveryEmail: string | null }).recoveryEmail;
   if (!destination) return;
 
   const rawToken = randomBytes(32).toString('base64url');

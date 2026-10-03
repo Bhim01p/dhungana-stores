@@ -9,7 +9,7 @@ export type PaymentStatus = "PENDING" | "CONFIRMED" | "NOT_REQUIRED" | "REFUNDED
 
 export interface Category {
   id: string; name: string; slug: string;
-  description: string | null; active: boolean;
+  description: string | null; imageUrl?: string | null; active: boolean;
   parentId?: string | null;
   parent?: Pick<Category, "id" | "name" | "slug" | "parentId"> | null;
   children?: Category[];
@@ -60,6 +60,9 @@ export interface Order {
   customerName: string; phone: string; email: string | null;
   address: string; landmark: string | null; notes: string | null;
   subtotal: string; deliveryCharge: string; total: string;
+  paymentMethodName?: string | null;
+  paymentMethodQrImageUrl?: string | null;
+  paymentMethodAccountInfo?: string | null;
   paymentStatus: PaymentStatus; orderStatus: OrderStatus;
   createdAt: string; updatedAt: string;
   orderItems?: OrderItem[];
@@ -70,6 +73,7 @@ export interface CreateOrderPayload {
   customerName?: string;
   phone?: string;
   email?: string;
+  paymentMethodId?: string;
   address: string;
   landmark?: string;
   notes?: string;

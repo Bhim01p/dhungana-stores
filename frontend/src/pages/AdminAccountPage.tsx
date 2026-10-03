@@ -10,8 +10,6 @@ export default function AdminAccountPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState("");
-  const [emailNotice, setEmailNotice] = useState<string | null>(null);
-  const [emailError, setEmailError] = useState<string | null>(null);
   useEffect(() => {
     if (!token) return;
     adminAuthApi.me(token).then(me => setRecoveryEmail(me.recoveryEmail ?? "")).catch(() => undefined);
@@ -28,16 +26,6 @@ export default function AdminAccountPage() {
       logout();
     } catch (err) { setError(err instanceof Error ? err.message : "Could not update password."); }
     finally { setSaving(false); }
-  };
-
-  const saveRecoveryEmail = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!token) return;
-    setEmailError(null); setEmailNotice(null);
-    try {
-      await adminAuthApi.updateRecoveryEmail(token, recoveryEmail.trim());
-      setEmailNotice("Recovery email saved. Use an address you can access.");
-    } catch (err) { setEmailError(err instanceof Error ? err.message : "Could not save recovery email."); }
   };
 
   return (
@@ -58,14 +46,11 @@ export default function AdminAccountPage() {
         <button className="btn-primary" type="submit" disabled={saving}>{saving ? "Updating…" : "Update password"}</button>
         <p className="text-sm text-gray-500">You’ll be signed out after the change and can sign back in using the new password.</p>
       </form>
-      {user?.role === "ADMIN" && <form onSubmit={saveRecoveryEmail} className="card p-6 space-y-4">
+      {user?.role === "ADMIN" && <section className="card p-6 space-y-4">
         <h2 className="text-lg font-semibold">Password recovery email</h2>
-        <p className="text-sm text-gray-500">Use an inbox you control. A reset link will be sent here if you forget your admin password.</p>
-        <input required type="email" className="input" value={recoveryEmail} onChange={event => setRecoveryEmail(event.target.value)} />
-        {emailError && <p role="alert" className="text-sm text-red-700">{emailError}</p>}
-        {emailNotice && <p role="status" className="text-sm text-green-700">{emailNotice}</p>}
-        <button className="btn-primary" type="submit">Save recovery email</button>
-      </form>}
+        <p className="text-sm text-gray-500">Sign-in codes and password reset links go to the owner email set for this store.</p>
+        <input type="email" className="input disabled:bg-gray-100" value={recoveryEmail} disabled readOnly />
+      </section>}
     </div>
   );
 }

@@ -13,6 +13,7 @@ type CartAction =
   | { type: "ADD_ITEM"; product: Product; quantity?: number }
   | { type: "REMOVE_ITEM"; productId: string }
   | { type: "UPDATE_QTY"; productId: string; quantity: number }
+  | { type: "SYNC_PRODUCT"; product: Product }
   | { type: "CLEAR" }
   | { type: "OPEN_DRAWER" }
   | { type: "CLOSE_DRAWER" }
@@ -67,6 +68,22 @@ function cartReducer(state: CartState, action: CartAction): CartState {
       };
     }
 
+    case "SYNC_PRODUCT": {
+      const product = action.product;
+      return {
+        ...state,
+        items: state.items.map((item) => item.productId === product.id ? {
+          ...item,
+          name: product.name,
+          price: product.price,
+          unit: product.unit,
+          image: product.image,
+          stockQuantity: product.stockQuantity,
+          quantity: product.stockQuantity > 0 ? Math.min(item.quantity, product.stockQuantity) : item.quantity,
+        } : item),
+      };
+    }
+
     case "CLEAR":
       return { ...state, items: [] };
 
@@ -88,6 +105,7 @@ interface CartContextType {
   addItem: (product: Product, quantity?: number) => void;
   removeItem: (productId: string) => void;
   updateQty: (productId: string, quantity: number) => void;
+  syncProduct: (product: Product) => void;
   clearCart: () => void;
   openCart: () => void;
   closeCart: () => void;
@@ -144,6 +162,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         addItem: (product, quantity) => dispatch({ type: "ADD_ITEM", product, quantity }),
         removeItem: (productId) => dispatch({ type: "REMOVE_ITEM", productId }),
         updateQty: (productId, quantity) => dispatch({ type: "UPDATE_QTY", productId, quantity }),
+        syncProduct: (product) => dispatch({ type: "SYNC_PRODUCT", product }),
         clearCart: () => dispatch({ type: "CLEAR" }),
         openCart: () => dispatch({ type: "OPEN_DRAWER" }),
         closeCart: () => dispatch({ type: "CLOSE_DRAWER" }),

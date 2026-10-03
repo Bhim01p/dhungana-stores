@@ -4,15 +4,17 @@ import { useCart } from "../contexts/CartContext";
 import { useCustomerAuth } from "../contexts/CustomerAuthContext";
 import { ordersApi } from "../api/orders";
 import { paymentMethodsApi } from "../api/paymentMethods";
+import { productsApi } from "../api/products";
 import type { PaymentMethod } from "../types";
 import { DELIVERY_CHARGE, FREE_DELIVERY_THRESHOLD } from "../types";
 import LoadingSpinner from "../components/LoadingSpinner";
 import ErrorMessage from "../components/ErrorMessage";
+import PaymentQrImage from "../components/PaymentQrImage";
 import { rememberGuestOrderLookupToken } from "../utils/guestOrders";
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
-  const { items, subtotal, deliveryCharge: _dc, total, isFreeDelivery, clearCart } = useCart();
+  const { items, subtotal, total, isFreeDelivery, clearCart, syncProduct, removeItem } = useCart();
   const { customer, customerToken } = useCustomerAuth();
 
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -20,6 +22,10 @@ export default function CheckoutPage() {
   const [loadingMethods, setLoadingMethods] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkingCart, setCheckingCart] = useState(true);
+  const [cartCheckError, setCartCheckError] = useState<string | null>(null);
+  const [unavailableItems, setUnavailableItems] = useState<string[]>([]);
+  const cartIds = items.map((item) => item.productId).sort().join(",");
 
   const [form, setForm] = useState({
     customerName: "",
@@ -34,6 +40,35 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (items.length === 0) navigate("/products");
   }, [items, navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function refreshCart() {
+      if (!items.length) { setCheckingCart(false); return; }
+      setCheckingCart(true);
+      setCartCheckError(null);
+      setUnavailableItems([]);
+      const results = await Promise.all(items.map(async (item) => {
+        try { return { id: item.productId, product: await productsApi.getOne(item.productId), failed: false }; }
+        catch { return { id: item.productId, product: null, failed: true }; }
+      }));
+      if (cancelled) return;
+      const unavailable: string[] = [];
+      const failed = results.some((result) => result.failed);
+      for (const result of results) {
+        if (result.failed) continue;
+        if (!result.product || !result.product.active || result.product.stockQuantity <= 0) unavailable.push(result.id);
+        else syncProduct(result.product);
+      }
+      setUnavailableItems(unavailable);
+      if (failed) setCartCheckError("We couldn’t verify current prices and stock. Check your connection and reload checkout before ordering.");
+      setCheckingCart(false);
+    }
+    void refreshCart();
+    return () => { cancelled = true; };
+  // cartIds deliberately makes a price update not trigger another refetch.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartIds]);
 
   // Load payment methods
   useEffect(() => {
@@ -55,6 +90,7 @@ export default function CheckoutPage() {
         customerName: customer ? undefined : form.customerName,
         phone: customer ? undefined : form.phone,
         email: customer ? undefined : (form.email || undefined),
+        paymentMethodId: selectedPayment || undefined,
         address: form.address,
         landmark: form.landmark || undefined,
         notes: form.notes || undefined,
@@ -84,6 +120,20 @@ export default function CheckoutPage() {
       </nav>
 
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Checkout</h1>
+
+      {unavailableItems.length > 0 && (
+        <div role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-semibold">Some cart items are no longer available. Remove them before placing this order.</p>
+          <div className="mt-3 space-y-2">
+            {unavailableItems.map((id) => {
+              const item = items.find((entry) => entry.productId === id);
+              return <div key={id} className="flex items-center justify-between gap-3"><span>{item?.name ?? "Unavailable item"}</span><button type="button" className="font-semibold underline" onClick={() => removeItem(id)}>Remove</button></div>;
+            })}
+          </div>
+        </div>
+      )}
+      {checkingCart && <p className="mb-4 text-sm text-gray-500">Checking current prices and stock…</p>}
+      {cartCheckError && <div role="alert" className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{cartCheckError}</div>}
 
       {error && <div className="mb-6"><ErrorMessage message={error} /></div>}
 
@@ -188,14 +238,9 @@ export default function CheckoutPage() {
             {loadingMethods ? (
               <LoadingSpinner message="Loading payment options..." />
             ) : paymentMethods.length === 0 ? (
-              <div className="bg-white border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center gap-3">
-                <img
-                  src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=BishnuAndDhunganaStores&bgcolor=ffffff"
-                  alt="Payment QR"
-                  className="w-40 h-40 object-contain rounded-lg border border-gray-200 bg-white p-2"
-                />
-                <p className="text-sm font-semibold text-gray-700 text-center">Scan to confirm payment</p>
-                <p className="text-xs text-gray-400 text-center">Payment QR will be updated soon. Place your order and we will contact you.</p>
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
+                <p className="font-semibold text-gray-800">No online payment method is configured</p>
+                <p className="mt-2 text-sm text-gray-600">You can still place the order. The store will contact you to arrange payment.</p>
               </div>
             ) : (
               <>
@@ -228,19 +273,7 @@ export default function CheckoutPage() {
                     <p className="text-sm font-semibold text-gray-700">
                       Scan QR to pay via {selectedMethod.name}
                     </p>
-                    <img
-                      src={selectedMethod.qrImageUrl}
-                      alt={`${selectedMethod.name} QR Code`}
-                      className="w-48 h-48 object-contain rounded-lg border border-gray-300 bg-white p-2"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=BishnuAndDhunganaStores&bgcolor=ffffff";
-                      }}
-                    />
-                    {selectedMethod.accountInfo && (
-                      <p className="text-sm text-gray-600 text-center">
-                        Account: <span className="font-bold">{selectedMethod.accountInfo}</span>
-                      </p>
-                    )}
+                    <PaymentQrImage url={selectedMethod.qrImageUrl} name={selectedMethod.name} accountInfo={selectedMethod.accountInfo} className="w-full" />
                     <p className="text-xs text-gray-500 text-center">
                       After payment, place your order. We will verify and confirm manually.
                     </p>
@@ -252,7 +285,7 @@ export default function CheckoutPage() {
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || checkingCart || Boolean(cartCheckError) || unavailableItems.length > 0}
             className="btn-primary w-full py-4 text-base rounded-xl disabled:opacity-60"
           >
             {submitting ? "Placing order..." : `Place Order — NPR ${total.toLocaleString("en-NP")}`}

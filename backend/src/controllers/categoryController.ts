@@ -1,6 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { categoryService } from '../services/categoryService';
 
+function isValidImageUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch { return false; }
+}
+
 // ─────────────────────────────────────────────
 // GET /api/categories
 // ─────────────────────────────────────────────
@@ -57,9 +64,10 @@ export async function createCategory(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { name, description, active, parentId } = req.body as {
+    const { name, description, imageUrl, active, parentId } = req.body as {
       name?: string;
       description?: string;
+      imageUrl?: string;
       active?: boolean;
       parentId?: string | null;
     };
@@ -68,8 +76,16 @@ export async function createCategory(
       res.status(400).json({ error: 'Category name is required.' });
       return;
     }
+    if (imageUrl !== undefined && typeof imageUrl !== 'string') {
+      res.status(400).json({ error: 'Category photo URL must be text.' });
+      return;
+    }
+    if (imageUrl !== undefined && imageUrl.trim() && !isValidImageUrl(imageUrl.trim())) {
+      res.status(400).json({ error: 'Category photo must use a valid HTTP or HTTPS URL.' });
+      return;
+    }
 
-    const category = await categoryService.create({ name, description, active, parentId });
+    const category = await categoryService.create({ name, description, imageUrl, active, parentId });
     res.status(201).json(category);
   } catch (err) {
     next(err);
@@ -91,16 +107,27 @@ export async function updateCategory(
       return;
     }
 
-    const { name, description, active, parentId } = req.body as {
+    const { name, description, imageUrl, active, parentId } = req.body as {
       name?: string;
       description?: string;
+      imageUrl?: string;
       active?: boolean;
       parentId?: string | null;
     };
 
+    if (imageUrl !== undefined && imageUrl !== null && typeof imageUrl !== 'string') {
+      res.status(400).json({ error: 'Category photo URL must be text.' });
+      return;
+    }
+    if (typeof imageUrl === 'string' && imageUrl.trim() && !isValidImageUrl(imageUrl.trim())) {
+      res.status(400).json({ error: 'Category photo must use a valid HTTP or HTTPS URL.' });
+      return;
+    }
+
     const category = await categoryService.update(String(req.params.id), {
       name,
       description,
+      imageUrl,
       active,
       parentId,
     });

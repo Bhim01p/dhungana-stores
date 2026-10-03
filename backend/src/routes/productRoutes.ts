@@ -25,7 +25,7 @@ router.post('/', requireAuth, requireRole(AdminRole.ADMIN), createProduct);
 // PATCH /api/products/:id
 router.patch('/:id', requireAuth, requireRole(AdminRole.ADMIN), updateProduct);
 
-// DELETE /api/products/:id  (soft-delete — sets active=false)
+// DELETE /api/products/:id  (permanent delete; inactive products only)
 router.delete('/:id', requireAuth, requireRole(AdminRole.ADMIN), deleteProduct);
 
 export default router;

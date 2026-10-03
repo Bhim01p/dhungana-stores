@@ -31,7 +31,7 @@ export default function ForgotPasswordPage({ accountType }: { accountType: "cust
         </label>
         <button type="submit" disabled={loading} className="btn-primary w-full">{loading ? "Sending…" : "Send reset link"}</button>
       </form>
-      <div className="mt-5 text-center"><Link to={isAdmin ? "/admin/login" : "/login"} className="text-sm text-brand-600 hover:underline">Back to sign in</Link></div>
+      <div className="mt-5 text-center"><Link to={isAdmin ? "/staff-login" : "/login"} className="text-sm text-brand-600 hover:underline">Back to sign in</Link></div>
     </div>
   </div>;
 }

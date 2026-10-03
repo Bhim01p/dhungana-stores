@@ -12,9 +12,9 @@ export const adminCategoriesApi = {
   },
   getOne: (token: string, idOrSlug: string) =>
     adminClient.get<Category>(`/admin/categories/${idOrSlug}`, token),
-  create: (token: string, data: { name: string; description?: string; active?: boolean; parentId?: string | null }) =>
+  create: (token: string, data: { name: string; description?: string; imageUrl?: string; active?: boolean; parentId?: string | null }) =>
     adminClient.post<Category>("/admin/categories", data, token),
-  update: (token: string, id: string, data: { name?: string; description?: string; active?: boolean; parentId?: string | null }) =>
+  update: (token: string, id: string, data: { name?: string; description?: string; imageUrl?: string; active?: boolean; parentId?: string | null }) =>
     adminClient.patch<Category>(`/admin/categories/${id}`, data, token),
   delete: (token: string, id: string) =>
     adminClient.delete<void>(`/admin/categories/${id}`, token),

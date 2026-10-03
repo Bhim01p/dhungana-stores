@@ -19,7 +19,7 @@ import {
 import {
   getAllPaymentMethods, createPaymentMethod, updatePaymentMethod, deletePaymentMethod,
 } from "../controllers/paymentMethodController";
-import { createStaff, listStaff, setStaffActive } from "../controllers/adminUserController";
+import { createStaff, deleteStaff, listStaff, setStaffActive } from "../controllers/adminUserController";
 
 const router = Router();
 
@@ -30,6 +30,7 @@ router.use(requireAuth);
 router.get("/staff", requireRole(AdminRole.ADMIN), asyncHandler(listStaff));
 router.post("/staff", requireRole(AdminRole.ADMIN), asyncHandler(createStaff));
 router.patch("/staff/:id", requireRole(AdminRole.ADMIN), asyncHandler(setStaffActive));
+router.delete("/staff/:id", requireRole(AdminRole.ADMIN), asyncHandler(deleteStaff));
 
 // -- Dashboard --
 router.get("/stats",            requireRole(AdminRole.ADMIN), asyncHandler(getDashboardStats));

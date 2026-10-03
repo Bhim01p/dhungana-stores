@@ -226,7 +226,7 @@ export async function updateProduct(
 }
 
 // ─────────────────────────────────────────────
-// DELETE /api/products/:id  (soft-delete)
+// DELETE /api/products/:id  (permanent delete; archived products only)
 // ─────────────────────────────────────────────
 export async function deleteProduct(
   req: Request,
@@ -240,8 +240,13 @@ export async function deleteProduct(
       return;
     }
 
-    await productService.deactivate(String(req.params.id));
-    res.status(200).json({ message: 'Product deactivated successfully.' });
+    if (existing.active) {
+      res.status(400).json({ error: 'Deactivate this product before deleting it.' });
+      return;
+    }
+
+    await productService.delete(String(req.params.id));
+    res.status(200).json({ message: 'Product deleted successfully. Existing order details are preserved.' });
   } catch (err) {
     next(err);
   }

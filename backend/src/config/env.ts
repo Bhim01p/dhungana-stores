@@ -11,6 +11,7 @@ export const env = {
   JWT_SECRET: process.env.JWT_SECRET ?? 'changeme-use-a-strong-secret-in-production',
   FRONTEND_URL: process.env.FRONTEND_URL ?? 'http://localhost:3000',
   STAFF_URL: process.env.STAFF_URL ?? '',
+  OWNER_ADMIN_EMAIL: process.env.OWNER_ADMIN_EMAIL?.trim().toLowerCase() || 'nishandhungana939@gmail.com',
   SMTP_HOST: process.env.SMTP_HOST ?? '',
   SMTP_PORT: parseInt(process.env.SMTP_PORT ?? '587', 10),
   SMTP_USER: process.env.SMTP_USER ?? '',

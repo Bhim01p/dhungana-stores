@@ -46,11 +46,22 @@ export default function AdminStaffPage() {
     } catch (err) { setError(err instanceof Error ? err.message : "Could not update staff access."); }
   };
 
+  const deleteStaff = async (account: StaffAccount) => {
+    if (!token || account.active) return;
+    if (!window.confirm(`Permanently delete the staff login for “${account.username}”? This cannot be undone.`)) return;
+    setError(null); setNotice(null);
+    try {
+      await adminStaffApi.delete(token, account.id);
+      await refresh();
+      setNotice("Staff account permanently deleted.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not delete the staff account."); }
+  };
+
   return (
     <div className="p-4 md:p-8 max-w-4xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Staff access</h1>
-        <p className="mt-1 text-gray-500">Create a separate login for each staff member. Staff can view and update orders, but cannot manage products, payments, or staff accounts. Staff can change their own password under My Account.</p>
+        <p className="mt-1 text-gray-500">Create a separate login for each staff member. Staff can view and update orders, but cannot manage products, payments, or staff accounts. Each sign-in also sends a code to the recovery email below, so use an inbox the staff member can access. Staff can change their own password under My Account.</p>
       </div>
 
       <form onSubmit={createStaff} className="card p-6 space-y-4">
@@ -77,9 +88,12 @@ export default function AdminStaffPage() {
             {staff.map(account => (
               <li key={account.id} className="flex items-center justify-between gap-4 p-4 md:px-6">
                 <div><p className="font-medium text-gray-900">{account.username}</p><p className="text-sm text-gray-500">{account.recoveryEmail} · {account.active ? "Access enabled" : "Access disabled"}</p></div>
-                <button type="button" onClick={() => void toggleActive(account)} className={account.active ? "text-sm font-medium text-red-600 hover:text-red-800" : "text-sm font-medium text-green-700 hover:text-green-900"}>
-                  {account.active ? "Disable access" : "Enable access"}
-                </button>
+                <div className="flex shrink-0 items-center gap-4">
+                  <button type="button" onClick={() => void toggleActive(account)} className={account.active ? "text-sm font-medium text-red-600 hover:text-red-800" : "text-sm font-medium text-green-700 hover:text-green-900"}>
+                    {account.active ? "Disable access" : "Enable access"}
+                  </button>
+                  {!account.active && <button type="button" onClick={() => void deleteStaff(account)} className="text-sm font-semibold text-red-700 hover:text-red-900">Delete</button>}
+                </div>
               </li>
             ))}
           </ul>

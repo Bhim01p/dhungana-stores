@@ -8,6 +8,7 @@ import { slugify } from '../utils/slugify';
 export interface CreateCategoryInput {
   name: string;
   description?: string;
+  imageUrl?: string;
   active?: boolean;
   parentId?: string | null;
 }
@@ -15,6 +16,7 @@ export interface CreateCategoryInput {
 export interface UpdateCategoryInput {
   name?: string;
   description?: string;
+  imageUrl?: string;
   active?: boolean;
   parentId?: string | null;
 }
@@ -52,7 +54,7 @@ export const categoryService = {
           children: {
             where: { active: true },
             select: {
-              id: true, name: true, slug: true, description: true, active: true, parentId: true,
+              id: true, name: true, slug: true, description: true, imageUrl: true, active: true, parentId: true,
               createdAt: true, updatedAt: true,
               _count: { select: { products: true } },
             },
@@ -97,6 +99,7 @@ export const categoryService = {
         name: input.name.trim(),
         slug,
         description: input.description?.trim(),
+        imageUrl: input.imageUrl?.trim() || null,
         active: input.active ?? true,
         parentId: input.parentId || null,
       },
@@ -121,6 +124,7 @@ export const categoryService = {
       data.slug = slugify(input.name);
     }
     if (input.description !== undefined) data.description = input.description.trim();
+    if (input.imageUrl !== undefined) data.imageUrl = input.imageUrl.trim() || null;
     if (input.active !== undefined) data.active = input.active;
     if (input.parentId !== undefined) {
       if (input.parentId) {

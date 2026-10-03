@@ -6,11 +6,18 @@ interface AdminUser {
   role: string;
 }
 
+interface LoginChallenge {
+  challengeId: string;
+  emailHint: string;
+  expiresInSeconds: number;
+}
+
 interface AuthContextType {
   user: AdminUser | null;
   token: string | null;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<LoginChallenge>;
+  verifyLoginCode: (challengeId: string, code: string) => Promise<void>;
   logout: () => void;
   refreshToken: () => Promise<void>;
   error: string | null;
@@ -36,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = async (username: string, password: string) => {
+  const login = async (username: string, password: string): Promise<LoginChallenge> => {
     try {
       setError(null);
       const res = await fetch('/api/auth/login', {
@@ -46,6 +53,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Login failed');
+      if (!data.challengeId || !data.emailHint) throw new Error('The sign-in code could not be started. Please try again.');
+      return data as LoginChallenge;
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const verifyLoginCode = async (challengeId: string, code: string) => {
+    try {
+      setError(null);
+      const res = await fetch('/api/auth/verify-login-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ challengeId, code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Code verification failed');
       sessionStorage.setItem('adminToken', data.token);
       sessionStorage.setItem('adminUser', JSON.stringify(data.admin));
       setToken(data.token);
@@ -74,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout, refreshToken, error }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, verifyLoginCode, logout, refreshToken, error }}>
       {children}
     </AuthContext.Provider>
   );

@@ -25,7 +25,7 @@ export default function ResetPasswordPage() {
     finally { setLoading(false); }
   };
 
-  const loginHref = type === "admin" ? "/admin/login" : "/login";
+  const loginHref = type === "admin" ? "/staff-login" : "/login";
   return <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
     <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
       <h1 className="text-2xl font-bold text-gray-900">Set a new password</h1>

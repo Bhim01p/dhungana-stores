@@ -255,4 +255,9 @@ export const productService = {
   async deactivate(id: string) {
     return prisma.product.update({ where: { id }, data: { active: false } });
   },
+
+  /** Permanently remove an archived product. Order items keep their saved name and price. */
+  async delete(id: string) {
+    return prisma.product.delete({ where: { id } });
+  },
 };

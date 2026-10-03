@@ -23,6 +23,12 @@ function paymentColor(s: PaymentStatus) {
   return "bg-gray-100 text-gray-700";
 }
 
+function paymentChoices(current: PaymentStatus): PaymentStatus[] {
+  if (current === "PENDING") return ["PENDING", "CONFIRMED", "NOT_REQUIRED"];
+  if (current === "CONFIRMED") return ["CONFIRMED", "REFUNDED"];
+  return [current];
+}
+
 export default function AdminOrdersPage() {
   const { token } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
@@ -133,8 +139,9 @@ export default function AdminOrdersPage() {
             </label>
             <label className="block text-xs font-semibold text-gray-600">Payment status
               <select className={`mt-1 w-full rounded-lg border border-transparent px-3 py-2.5 text-sm font-semibold ${paymentColor(order.paymentStatus)}`} value={order.paymentStatus} onChange={e => handlePaymentStatusChange(order.id, e.target.value as PaymentStatus)}>
-                {PAYMENT_STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g," ")}</option>)}
+                {paymentChoices(order.paymentStatus).map(s => <option key={s} value={s}>{s.replace(/_/g," ")}</option>)}
               </select>
+              {order.paymentStatus === "CONFIRMED" && <span className="mt-1 block font-normal text-gray-500">After you process the refund manually, mark it Refunded before cancelling.</span>}
             </label>
           </div>
           <button type="button" className="w-full rounded-lg border border-gray-200 py-2.5 text-sm font-semibold text-brand-600" onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}>
@@ -146,6 +153,7 @@ export default function AdminOrdersPage() {
               {order.landmark && <p><span className="font-semibold">Landmark:</span> {order.landmark}</p>}
               {order.email && <p className="break-all"><span className="font-semibold">Email:</span> {order.email}</p>}
               {order.notes && <p><span className="font-semibold">Notes:</span> {order.notes}</p>}
+              <p><span className="font-semibold">Payment method:</span> {order.paymentMethodName ?? "Not recorded"}{order.paymentMethodAccountInfo ? ` · ${order.paymentMethodAccountInfo}` : ""}</p>
             </div>
             <div className="space-y-2">
               {order.orderItems?.map((item: any) => <div key={item.id} className="flex justify-between gap-3 text-gray-600">
@@ -198,6 +206,7 @@ export default function AdminOrdersPage() {
                             <option key={s} value={s}>{s.replace(/_/g," ")}</option>
                           ))}
                         </select>
+                        {order.paymentStatus === "CONFIRMED" && <span className="mt-1 block text-[10px] text-gray-500">Refund manually before cancellation</span>}
                       </td>
 
                       {/* Payment status — inline dropdown */}
@@ -207,7 +216,7 @@ export default function AdminOrdersPage() {
                           value={order.paymentStatus}
                           onChange={e => handlePaymentStatusChange(order.id, e.target.value as PaymentStatus)}
                         >
-                          {PAYMENT_STATUSES.map(s => (
+                            {paymentChoices(order.paymentStatus).map(s => (
                             <option key={s} value={s}>{s.replace(/_/g," ")}</option>
                           ))}
                         </select>
@@ -238,6 +247,7 @@ export default function AdminOrdersPage() {
                               {order.landmark && <p><span className="text-gray-500">Landmark:</span> {order.landmark}</p>}
                               {order.email && <p><span className="text-gray-500">Email:</span> {order.email}</p>}
                               {order.notes && <p><span className="text-gray-500">Notes:</span> {order.notes}</p>}
+                              <p><span className="text-gray-500">Payment method:</span> {order.paymentMethodName ?? "Not recorded"}{order.paymentMethodAccountInfo ? ` · ${order.paymentMethodAccountInfo}` : ""}</p>
                             </div>
                             {/* Order items */}
                             {order.orderItems && order.orderItems.length > 0 && (
