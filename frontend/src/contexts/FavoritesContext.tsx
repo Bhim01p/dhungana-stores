@@ -24,19 +24,18 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   const { customerToken, isCustomerLoading } = useCustomerAuth();
   const [favorites, setFavorites] = useState<Product[]>(readSaved);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isReady, setIsReady] = useState(false);
+  const [readyToken, setReadyToken] = useState<string | null>(null);
   const pendingChanges = useRef(new Map<string, { product: Product; saved: boolean }>());
+  const isReady = !isCustomerLoading && (!customerToken || readyToken === customerToken);
 
   useEffect(() => {
     if (isCustomerLoading) return;
     if (!customerToken) {
       setIsSyncing(false);
-      setIsReady(true);
       return;
     }
     let cancelled = false;
     pendingChanges.current.clear();
-    setIsReady(false);
     setIsSyncing(true);
     const guestFavorites = readSaved();
     void (async () => {
@@ -61,7 +60,7 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
         }
       } catch { /* Keep local favorites available if temporarily offline. */ }
-      finally { if (!cancelled) { setIsSyncing(false); setIsReady(true); } }
+      finally { if (!cancelled) { setIsSyncing(false); setReadyToken(customerToken); } }
     })();
     return () => { cancelled = true; };
   }, [customerToken, isCustomerLoading]);

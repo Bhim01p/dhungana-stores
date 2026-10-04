@@ -11,7 +11,12 @@ export async function readApiResponse<T>(response: Response, path: string): Prom
     }
   }
   if (!response.ok) {
-    const message = (body as { error?: string } | undefined)?.error;
+    const record = body && typeof body === "object" ? body as Record<string, unknown> : undefined;
+    const nestedError = record?.error && typeof record.error === "object"
+      ? record.error as Record<string, unknown>
+      : undefined;
+    const candidates = [record?.error, nestedError?.message, nestedError?.error, record?.message, record?.detail];
+    const message = candidates.find((candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0);
     throw new Error(message || `Request to ${path} failed (HTTP ${response.status})${text.trim() ? `: ${text.trim().slice(0, 180)}` : " with an empty response"}.`);
   }
   return text.trim() ? body as T : undefined as T;
