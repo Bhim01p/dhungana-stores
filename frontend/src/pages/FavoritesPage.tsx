@@ -8,7 +8,7 @@ import { productsApi } from "../api/products";
 import type { Product } from "../types";
 
 export default function FavoritesPage() {
-  const { favorites, isSyncing } = useFavorites();
+  const { favorites, isSyncing, isReady } = useFavorites();
   const { customerToken } = useCustomerAuth();
   const { t } = useLanguage();
   const [visibleFavorites, setVisibleFavorites] = useState<Product[]>(favorites);
@@ -31,7 +31,8 @@ export default function FavoritesPage() {
       <div><p className="text-sm font-semibold text-brand-600">♥ {t("Favorites")}</p><h1 className="mt-1 text-2xl font-extrabold text-stone-900">{t("Saved favorites")}</h1></div>
       {isSyncing && <span className="text-xs text-stone-500" role="status">Syncing…</span>}
     </div>
-    {visibleFavorites.length ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">{visibleFavorites.map((product) => <ProductCard key={product.id} product={product} />)}</div>
+    {customerToken && !isReady ? <div role="status" className="rounded-2xl border border-stone-200 bg-white px-5 py-12 text-center text-sm text-stone-500">Loading your saved favorites…</div>
+      : visibleFavorites.length ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">{visibleFavorites.map((product) => <ProductCard key={product.id} product={product} />)}</div>
       : <div className="rounded-2xl border border-stone-200 bg-white px-5 py-12 text-center">
         <p className="text-lg font-semibold text-stone-800">{t("No favorites saved yet.")}</p>
         <p className="mt-2 text-sm text-stone-500">{t("Save items with the heart button while shopping.")}</p>

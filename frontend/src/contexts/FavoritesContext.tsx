@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Product } from "../types";
 import { customersApi } from "../api/customers";
 import { useCustomerAuth } from "./CustomerAuthContext";
@@ -8,6 +8,7 @@ interface FavoritesContextValue {
   isFavorite: (productId: string) => boolean;
   toggleFavorite: (product: Product) => void;
   isSyncing: boolean;
+  isReady: boolean;
 }
 const FavoritesContext = createContext<FavoritesContextValue | null>(null);
 const STORAGE_KEY = "bd_favorite_products";
@@ -23,10 +24,19 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   const { customerToken, isCustomerLoading } = useCustomerAuth();
   const [favorites, setFavorites] = useState<Product[]>(readSaved);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const pendingChanges = useRef(new Map<string, { product: Product; saved: boolean }>());
 
   useEffect(() => {
-    if (isCustomerLoading || !customerToken) return;
+    if (isCustomerLoading) return;
+    if (!customerToken) {
+      setIsSyncing(false);
+      setIsReady(true);
+      return;
+    }
     let cancelled = false;
+    pendingChanges.current.clear();
+    setIsReady(false);
     setIsSyncing(true);
     const guestFavorites = readSaved();
     void (async () => {
@@ -40,13 +50,18 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
         }
         const saved = await customersApi.getFavorites(customerToken);
         if (!cancelled) {
-          const savedIds = new Set(saved.map((product) => product.id));
-          const merged = [...saved, ...failedGuestFavorites.filter((product) => !savedIds.has(product.id))];
+          const mergedById = new Map(saved.map((product) => [product.id, product]));
+          for (const product of failedGuestFavorites) if (!mergedById.has(product.id)) mergedById.set(product.id, product);
+          for (const [productId, change] of pendingChanges.current) {
+            if (change.saved) mergedById.set(productId, change.product);
+            else mergedById.delete(productId);
+          }
+          const merged = [...mergedById.values()];
           setFavorites(merged);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
         }
       } catch { /* Keep local favorites available if temporarily offline. */ }
-      finally { if (!cancelled) setIsSyncing(false); }
+      finally { if (!cancelled) { setIsSyncing(false); setIsReady(true); } }
     })();
     return () => { cancelled = true; };
   }, [customerToken, isCustomerLoading]);
@@ -54,11 +69,13 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   const toggleFavorite = useCallback((product: Product) => {
     const wasSaved = favorites.some((item) => item.id === product.id);
     const next = wasSaved ? favorites.filter((item) => item.id !== product.id) : [product, ...favorites];
+    if (customerToken && isSyncing) pendingChanges.current.set(product.id, { product, saved: !wasSaved });
     setFavorites(next);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     if (customerToken) {
       const request = wasSaved ? customersApi.removeFavorite(customerToken, product.id) : customersApi.addFavorite(customerToken, product.id);
       void request.catch(() => {
+        if (isSyncing) pendingChanges.current.set(product.id, { product, saved: wasSaved });
         setFavorites((current) => {
           const restored = wasSaved ? [product, ...current.filter((item) => item.id !== product.id)] : current.filter((item) => item.id !== product.id);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
@@ -66,9 +83,9 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
         });
       });
     }
-  }, [customerToken, favorites]);
+  }, [customerToken, favorites, isSyncing]);
 
-  return <FavoritesContext.Provider value={{ favorites, isFavorite: (id) => favorites.some((item) => item.id === id), toggleFavorite, isSyncing }}>{children}</FavoritesContext.Provider>;
+  return <FavoritesContext.Provider value={{ favorites, isFavorite: (id) => favorites.some((item) => item.id === id), toggleFavorite, isSyncing, isReady }}>{children}</FavoritesContext.Provider>;
 }
 
 export function useFavorites() {
