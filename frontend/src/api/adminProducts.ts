@@ -41,7 +41,10 @@ export const adminProductsApi = {
     unit: Unit;
     stockQuantity?: number;
     lowStockThreshold?: number;
+    supplierName?: string;
+    expiresAt?: string | null;
     image?: string;
+    images?: string[];
     active?: boolean;
     featured?: boolean;
   }) => adminClient.post<Product>("/admin/products", data, token),
@@ -55,7 +58,10 @@ export const adminProductsApi = {
     unit: Unit;
     stockQuantity?: number;
     lowStockThreshold?: number;
+    supplierName?: string | null;
+    expiresAt?: string | null;
     image?: string;
+    images?: string[];
     active?: boolean;
     featured?: boolean;
   }>) => adminClient.patch<Product>(`/admin/products/${id}`, data, token),

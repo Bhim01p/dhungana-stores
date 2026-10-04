@@ -11,6 +11,19 @@
   }
 }
 
+.public-nepali {
+  font-family: "Nirmala UI", "Noto Sans Devanagari", "Mangal", sans-serif;
+  font-weight: 500;
+}
+.public-nepali h1,
+.public-nepali h2,
+.public-nepali h3,
+.public-nepali label,
+.public-nepali button,
+.public-nepali a {
+  font-weight: 650;
+}
+
 @layer components {
   /* ── Buttons ── */
   .btn-primary {
@@ -108,7 +121,8 @@
 /* Show only the bill in the browser's print dialog. */
 .print-bill { display: none; }
 @media print {
-  html, body { background: #fff !important; }
+  html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+  body > #root { display: none !important; }
   body * { visibility: hidden !important; }
   .print-bill,
   .print-bill * { visibility: visible !important; }
@@ -116,13 +130,14 @@
     display: block !important;
     position: absolute;
     inset: 0 auto auto 0;
-    width: 100%;
+    width: 74mm;
     max-width: 74mm;
     color: #111827;
     background: #fff;
     font: 10px/1.35 Arial, sans-serif;
   }
   .bill-header { text-align: center; border-bottom: 1px dashed #6b7280; padding-bottom: 6px; }
+  .bill-logo { display: block; width: 28mm; height: 18mm; margin: 0 auto; object-fit: contain; }
   .bill-store-name { margin: 0; font-size: 15px; line-height: 1.2; font-weight: 700; }
   .bill-title { margin: 3px 0 0; font-size: 9px; text-transform: uppercase; letter-spacing: .12em; }
   .bill-meta { display: grid; gap: 3px; margin: 8px 0; }

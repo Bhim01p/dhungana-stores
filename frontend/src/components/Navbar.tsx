@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useCart } from "../contexts/CartContext";
 import { useCustomerAuth } from "../contexts/CustomerAuthContext";
+import { useLanguage } from "../i18n/LanguageContext";
+import BrandLogo from "./BrandLogo";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -11,6 +13,7 @@ export default function Navbar() {
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const { itemCount, openCart } = useCart();
   const { customer, customerLogout } = useCustomerAuth();
+  const { language, setLanguage, t } = useLanguage();
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
@@ -41,44 +44,44 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16 gap-4">
 
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 shrink-0">
-            <div className="w-9 h-9 bg-brand-500 rounded-lg flex items-center justify-center shadow-sm">
-              <span className="text-white font-bold text-lg">B</span>
-            </div>
-            <div className="hidden sm:block">
-              <p className="text-sm font-bold text-gray-900 leading-tight">Bishnu &amp; Dhungana</p>
-              <p className="text-xs text-brand-500 leading-tight font-medium">Stores</p>
-            </div>
+          <Link to="/" className="flex shrink-0 items-center rounded-lg bg-white" aria-label="Bishnu & Dhungana Stores home">
+            <BrandLogo alt="" className="h-12 w-[72px] sm:h-14 sm:w-[84px]" />
           </Link>
 
           {/* Desktop search */}
-          <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-sm">
-            <div className="relative w-full">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-sm">🔍</span>
+          <form onSubmit={handleSearch} role="search" className="hidden min-w-0 max-w-xs flex-1 md:flex lg:max-w-sm">
+            <div className="flex w-full items-center rounded-full border border-stone-200 bg-stone-50 p-1 shadow-sm transition focus-within:border-brand-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand-100">
+              <svg className="ml-3 h-4 w-4 shrink-0 text-stone-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m16 16 4 4" /></svg>
               <input type="search" value={searchValue} onChange={e => setSearchValue(e.target.value)}
-                placeholder="Search products..."
-                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-gray-50" />
+                placeholder={t("Find something in the store")} aria-label={t("Search products")}
+                className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-0" />
+              {searchValue && <button type="button" onClick={() => setSearchValue("")} aria-label="Clear search" className="rounded-full p-1.5 text-stone-400 hover:bg-stone-200 hover:text-stone-700">×</button>}
+              <button type="submit" aria-label={t("Search")} className="rounded-full bg-brand-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-700">{t("Search")}</button>
             </div>
           </form>
 
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-1">
-            <NavLink to="/" end className={linkClass}>Home</NavLink>
-            <NavLink to="/products" className={linkClass}>Products</NavLink>
-            <NavLink to="/categories" className={linkClass}>Categories</NavLink>
-            <NavLink to="/orders" className={linkClass}>Orders</NavLink>
+            <NavLink to="/" end className={linkClass}>{t("Home")}</NavLink>
+            <NavLink to="/products" className={linkClass}>{t("Shop")}</NavLink>
+            <NavLink to="/orders" className={linkClass}>{t("Orders")}</NavLink>
+            <NavLink to="/favorites" className={({ isActive }) => `${linkClass({ isActive })} px-2`} title={t("Favorites")} aria-label={t("Favorites")}><span className="text-rose-600" aria-hidden="true">♥</span><span className="ml-1 hidden xl:inline">{t("Favorites")}</span></NavLink>
+            <NavLink to="/help" className={linkClass}>{t("Help")}</NavLink>
+            <button type="button" onClick={() => setLanguage(language === "en" ? "ne" : "en")} className="ml-1 rounded-lg border border-stone-200 px-2.5 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50" aria-label="Change language">
+              {language === "en" ? "नेपाली" : "English"}
+            </button>
 
             {/* Account button — direct link, no dropdown */}
             {customer ? (
               <Link to="/profile" className="ml-1 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
-                <div className="w-6 h-6 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 font-bold text-xs">
-                  {customer.name[0].toUpperCase()}
+                <div className="h-7 w-7 overflow-hidden rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-xs">
+                  {customer.imageUrl ? <img src={customer.imageUrl} alt="" className="h-full w-full object-cover" /> : customer.name[0].toUpperCase()}
                 </div>
                 <span className="max-w-[80px] truncate">{customer.name.split(" ")[0]}</span>
               </Link>
             ) : (
               <Link to="/login" className="ml-1 btn-secondary text-sm py-1.5 px-3">
-                Login
+                {t("Login")}
               </Link>
             )}
 
@@ -98,8 +101,8 @@ export default function Navbar() {
           {/* Mobile: cart + hamburger */}
           <div className="md:hidden flex items-center gap-2">
             {customer ? (
-              <Link to="/profile" className="w-8 h-8 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 font-bold text-sm">
-                {customer.name[0].toUpperCase()}
+              <Link to="/profile" className="h-8 w-8 overflow-hidden bg-brand-100 rounded-full flex items-center justify-center text-brand-600 font-bold text-sm" aria-label="My profile">
+                {customer.imageUrl ? <img src={customer.imageUrl} alt="" className="h-full w-full object-cover" /> : customer.name[0].toUpperCase()}
               </Link>
             ) : (
               <Link to="/login" className="text-xs text-brand-600 font-semibold px-2 py-1 border border-brand-300 rounded-lg">Login</Link>
@@ -132,29 +135,34 @@ export default function Navbar() {
       {mobileOpen && (
         <div ref={mobileMenuRef} className="md:hidden border-t border-gray-100 bg-white shadow-lg">
           <div className="px-4 pt-3 pb-4 space-y-3">
-            <form onSubmit={handleSearch}>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
+            <form onSubmit={handleSearch} role="search">
+              <div className="flex items-center gap-2 rounded-2xl border border-stone-200 bg-stone-50 p-1.5 focus-within:border-brand-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-brand-100">
+                <svg className="ml-2 h-5 w-5 shrink-0 text-stone-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m16 16 4 4" /></svg>
                 <input type="search" value={searchValue} onChange={e => setSearchValue(e.target.value)}
-                  placeholder="Search products..."
-                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-gray-50" />
+                  placeholder={t("Search products")} aria-label={t("Search products")}
+                  className="min-w-0 flex-1 border-0 bg-transparent px-1 py-2.5 text-sm focus:outline-none focus:ring-0" />
+                <button type="submit" aria-label={t("Search products")} className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-brand-700">{t("Search")}</button>
               </div>
             </form>
             <nav className="flex flex-col gap-1">
-              <NavLink to="/" end className={linkClass} onClick={() => setMobileOpen(false)}>🏠 Home</NavLink>
-              <NavLink to="/products" className={linkClass} onClick={() => setMobileOpen(false)}>🛍️ Products</NavLink>
-              <NavLink to="/categories" className={linkClass} onClick={() => setMobileOpen(false)}>📂 Categories</NavLink>
-              <NavLink to="/orders" className={linkClass} onClick={() => setMobileOpen(false)}>📦 Orders</NavLink>
+              <NavLink to="/" end className={linkClass} onClick={() => setMobileOpen(false)}>🏠 {t("Home")}</NavLink>
+              <NavLink to="/products" className={linkClass} onClick={() => setMobileOpen(false)}>🛍️ {t("Shop products")}</NavLink>
+              <NavLink to="/orders" className={linkClass} onClick={() => setMobileOpen(false)}>📦 {t("Orders")}</NavLink>
+              <NavLink to="/favorites" className={linkClass} onClick={() => setMobileOpen(false)}><span className="text-rose-600" aria-hidden="true">♥</span> {t("Favorites")}</NavLink>
+              <NavLink to="/help" className={linkClass} onClick={() => setMobileOpen(false)}>💬 {t("Help & feedback")}</NavLink>
+              <button type="button" onClick={() => setLanguage(language === "en" ? "ne" : "en")} className="mx-3 flex min-h-10 items-center justify-between rounded-lg border border-stone-200 px-3 text-sm font-semibold text-stone-700">
+                <span>{language === "en" ? "भाषा / Language" : "भाषा / Language"}</span><span className="rounded-full bg-brand-50 px-2 py-1 text-xs text-brand-700">{language === "en" ? "नेपाली" : "English"}</span>
+              </button>
               {customer ? (
                 <>
-                  <NavLink to="/profile" className={linkClass} onClick={() => setMobileOpen(false)}>👤 Profile</NavLink>
+                  <NavLink to="/profile" className={linkClass} onClick={() => setMobileOpen(false)}>👤 {t("Profile")}</NavLink>
                   <button onClick={() => { customerLogout(); setMobileOpen(false); }}
                     className="text-left px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50">
-                    🚪 Logout
+                    🚪 {t("Logout")}
                   </button>
                 </>
               ) : (
-                <NavLink to="/login" className={linkClass} onClick={() => setMobileOpen(false)}>🔑 Login / Sign Up</NavLink>
+                <NavLink to="/login" className={linkClass} onClick={() => setMobileOpen(false)}>🔑 {t("Login")} / Sign Up</NavLink>
               )}
             </nav>
           </div>

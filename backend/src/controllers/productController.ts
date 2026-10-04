@@ -33,6 +33,7 @@ export async function getProducts(
     const categoryId = req.query.categoryId as string | undefined;
     const categorySlug = req.query.category as string | undefined;
     const search = req.query.search as string | undefined;
+    const ids = typeof req.query.ids === 'string' ? req.query.ids.split(',').filter(Boolean).slice(0, 50) : undefined;
 
     const result = await productService.getAll({
       publicOnly: isPublicRoute,
@@ -45,6 +46,7 @@ export async function getProducts(
       categoryId,
       categorySlug,
       search,
+      ids,
     });
 
     res.status(200).json(result);
@@ -62,8 +64,9 @@ export async function getProduct(
   next: NextFunction
 ): Promise<void> {
   try {
-    const product = await productService.getOne(String(req.params.idOrSlug));
-    if (!product || (!req.baseUrl.includes('/admin') && (!product.active || !product.category.active || product.category.parent?.active === false))) {
+    const isPublicRoute = !req.baseUrl.includes('/admin');
+    const product = await productService.getOne(String(req.params.idOrSlug), isPublicRoute);
+    if (!product || (isPublicRoute && (!product.active || !product.category.active || product.category.parent?.active === false))) {
       res.status(404).json({ error: 'Product not found.' });
       return;
     }
@@ -92,7 +95,10 @@ export async function createProduct(
       unit?: string;
       stockQuantity?: number;
       lowStockThreshold?: number;
+      supplierName?: string;
+      expiresAt?: string | null;
       image?: string;
+      images?: string[];
       active?: boolean;
       featured?: boolean;
     };
@@ -112,6 +118,10 @@ export async function createProduct(
     }
     if (!body.unit) {
       res.status(400).json({ error: 'Unit is required.' });
+      return;
+    }
+    if (body.images !== undefined && (!Array.isArray(body.images) || body.images.length > 8 || body.images.some((url) => typeof url !== 'string'))) {
+      res.status(400).json({ error: 'Product galleries can contain up to 8 image URLs.' });
       return;
     }
 
@@ -148,10 +158,13 @@ export async function createProduct(
       unit: body.unit as Unit,
       stockQuantity: body.stockQuantity,
       lowStockThreshold: body.lowStockThreshold,
+      supplierName: body.supplierName,
+      expiresAt: body.expiresAt,
       image: body.image,
+      images: body.images,
       active: body.active,
       featured: body.featured,
-    });
+    }, req.admin?.sub);
 
     res.status(201).json(product);
   } catch (err) {
@@ -184,10 +197,18 @@ export async function updateProduct(
       unit?: string;
       stockQuantity?: number;
       lowStockThreshold?: number;
+      supplierName?: string | null;
+      expiresAt?: string | null;
       image?: string;
+      images?: string[];
       active?: boolean;
       featured?: boolean;
     };
+
+    if (body.images !== undefined && (!Array.isArray(body.images) || body.images.length > 8 || body.images.some((url) => typeof url !== 'string'))) {
+      res.status(400).json({ error: 'Product galleries can contain up to 8 image URLs.' });
+      return;
+    }
 
     // Validate unit if provided
     if (body.unit !== undefined) {
@@ -214,10 +235,15 @@ export async function updateProduct(
       return;
     }
 
+    if (body.expiresAt && Number.isNaN(Date.parse(body.expiresAt))) {
+      res.status(400).json({ error: 'Enter a valid expiry date.' });
+      return;
+    }
+
     const product = await productService.update(String(req.params.id), {
       ...body,
       unit: body.unit as Unit | undefined,
-    });
+    }, req.admin?.sub);
 
     res.status(200).json(product);
   } catch (err) {

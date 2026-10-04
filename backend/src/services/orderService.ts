@@ -1,9 +1,9 @@
 import prisma from '../config/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
 import { createHash, randomBytes } from 'crypto';
+import { OrderFulfillmentType } from '@prisma/client';
 
 // ─── Constants ────────────────────────────────
-const FREE_DELIVERY_THRESHOLD = 500;   // NPR
 const DELIVERY_CHARGE = 50;            // NPR
 
 // ─── Types ────────────────────────────────────
@@ -22,6 +22,10 @@ export interface CreateOrderInput {
   items: CartItemInput[];
   customerId?: string;
   paymentMethodId?: string;
+  fulfillmentType?: OrderFulfillmentType;
+  deliveryAreaId?: string;
+  deliveryDate?: string;
+  deliverySlotId?: string;
 }
 
 // ─── Helpers ──────────────────────────────────
@@ -55,6 +59,17 @@ export const orderService = {
     if (input.items.length > 100) {
       throw Object.assign(new Error('An order cannot contain more than 100 different items.'), { statusCode: 400 });
     }
+    const fulfillmentType = input.fulfillmentType ?? OrderFulfillmentType.DELIVERY;
+    const dateText = input.deliveryDate ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText) || !input.deliverySlotId) {
+      throw Object.assign(new Error('Choose a date and time slot.'), { statusCode: 400 });
+    }
+    const chosenDate = new Date(`${dateText}T00:00:00.000Z`);
+    const nepaliToday = new Date(Date.now() + 345 * 60 * 1000);
+    const todayText = `${nepaliToday.getUTCFullYear()}-${String(nepaliToday.getUTCMonth() + 1).padStart(2, '0')}-${String(nepaliToday.getUTCDate()).padStart(2, '0')}`;
+    const todayDate = new Date(`${todayText}T00:00:00.000Z`);
+    const dayOffset = Math.round((chosenDate.getTime() - todayDate.getTime()) / 86_400_000);
+    if (Number.isNaN(chosenDate.getTime()) || dayOffset < 0 || dayOffset > 7) throw Object.assign(new Error('Choose a date from today through the next seven days.'), { statusCode: 400 });
     const quantities = new Map<string, number>();
     for (const item of input.items) {
       if (!item || typeof item.productId !== 'string' || !item.productId.trim() || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || item.quantity > 10000) {
@@ -85,6 +100,16 @@ export const orderService = {
       if (input.paymentMethodId && !paymentMethod) {
         throw Object.assign(new Error('That payment method is no longer available. Choose another method and try again.'), { statusCode: 400 });
       }
+      const slot = await tx.deliverySlot.findFirst({ where: { id: input.deliverySlotId, active: true } });
+      if (!slot || (slot.weekdays.length > 0 && !slot.weekdays.includes(chosenDate.getUTCDay()))) {
+        throw Object.assign(new Error('That time slot is not available for the selected date. Choose another slot.'), { statusCode: 400 });
+      }
+      const area = fulfillmentType === OrderFulfillmentType.DELIVERY
+        ? await tx.deliveryArea.findFirst({ where: { id: input.deliveryAreaId, active: true } })
+        : null;
+      if (fulfillmentType === OrderFulfillmentType.DELIVERY && !area) {
+        throw Object.assign(new Error('Choose an active delivery area.'), { statusCode: 400 });
+      }
 
       const products = await tx.product.findMany({
         where: { id: { in: orderItems.map((item) => item.productId) }, active: true },
@@ -106,6 +131,12 @@ export const orderService = {
         if (reserved.count !== 1) {
           throw Object.assign(new Error(`Insufficient stock for ${product.name}.`), { statusCode: 409 });
         }
+        const stockAfter = (await tx.product.findUniqueOrThrow({ where: { id: product.id }, select: { stockQuantity: true } })).stockQuantity;
+        await tx.inventoryMovement.create({ data: {
+          productId: product.id, productName: product.name, type: 'ONLINE_ORDER',
+          quantityChange: -item.quantity, stockAfter,
+          reference: orderNumber, reason: 'Stock reserved for an online order.',
+        } });
         const unitPrice = Number(product.price);
         const itemSubtotal = unitPrice * item.quantity;
         subtotal += itemSubtotal;
@@ -115,7 +146,8 @@ export const orderService = {
         orderItemsData.push({ productId: product.id, productName: product.name, unit: product.unit,
           quantity: item.quantity, unitPrice: new Decimal(unitPrice), subtotal: new Decimal(itemSubtotal) });
       }
-      const deliveryCharge = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
+      const deliveryCharge = fulfillmentType === OrderFulfillmentType.PICKUP ? 0
+        : subtotal >= Number(area!.freeDeliveryThreshold) ? 0 : Number(area!.deliveryCharge ?? DELIVERY_CHARGE);
       const total = subtotal + deliveryCharge;
       return tx.order.create({
         data: {
@@ -123,7 +155,11 @@ export const orderService = {
           customerName: input.customerName.trim(),
           phone: input.phone.trim(),
           email: input.email?.trim() || null,
-          address: input.address.trim(),
+          address: fulfillmentType === OrderFulfillmentType.PICKUP ? 'Store pickup' : input.address.trim(),
+          fulfillmentType,
+          deliveryAreaId: area?.id ?? null,
+          deliveryDate: chosenDate,
+          deliverySlotId: slot.id,
           landmark: input.landmark?.trim() || null,
           notes: input.notes?.trim() || null,
           subtotal: new Decimal(subtotal),
@@ -137,7 +173,7 @@ export const orderService = {
           stockReserved: true,
           orderItems: { create: orderItemsData },
         },
-        include: { orderItems: true },
+        include: { orderItems: true, deliveryArea: { select: { name: true } }, deliverySlot: { select: { label: true } } },
       });
     });
     const { guestLookupTokenHash: _hash, ...safeOrder } = created;
@@ -145,10 +181,17 @@ export const orderService = {
   },
 
   async getOne(id: string) {
-    return prisma.order.findUnique({ where: { id }, include: { orderItems: true } });
+    return prisma.order.findUnique({ where: { id }, include: { orderItems: true, deliveryArea: { select: { name: true } }, deliverySlot: { select: { label: true } } } });
   },
 
   async getByGuestLookupToken(token: string) {
-    return prisma.order.findUnique({ where: { guestLookupTokenHash: hashLookupToken(token) }, include: { orderItems: true } });
+    return prisma.order.findUnique({
+      where: { guestLookupTokenHash: hashLookupToken(token) },
+      include: {
+        orderItems: true,
+        deliveryArea: { select: { name: true } },
+        deliverySlot: { select: { label: true } },
+      },
+    });
   },
 };

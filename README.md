@@ -82,22 +82,24 @@ There is no public admin sign-up page. Create or reset the first ADMIN account f
 
 ```powershell
 $env:ADMIN_USERNAME = "admin"
-$env:ADMIN_EMAIL = "owner@example.com"
+$env:OWNER_ADMIN_EMAIL = "owner@example.com"
 $securePassword = Read-Host "Choose an admin password (12+ characters)" -AsSecureString
 $env:ADMIN_PASSWORD = [System.Net.NetworkCredential]::new("", $securePassword).Password
 npm run admin:setup
 $env:ADMIN_USERNAME = $null
-$env:ADMIN_EMAIL = $null
+$env:OWNER_ADMIN_EMAIL = $null
 $env:ADMIN_PASSWORD = $null
 ```
 
 The command creates the ADMIN account if it does not exist, or resets the password and saves its recovery email if that ADMIN username already exists. It does not print the password. Keep the password private and clear the temporary environment values after setup. Do not put real passwords in source files or commit them.
 
-After signing in at `/admin`, an ADMIN can open **Staff Access** and create a separate login for each staff member. Staff can view orders and update fulfilment status. They cannot access product, category, payment-method, dashboard, or staff-management endpoints. Staff can change their own password under **My Account**. Disabling an account prevents future API access, even if that person still has an old login token.
+The owner and staff sign in at `/staff-login` (or on the configured staff domain). After signing in, the main admin can open **Staff Access** to create staff accounts, choose the areas each person can use, change staff passwords, or disable access. Staff permissions are checked by the API as well as the interface. Staff cannot change or recover their own password; ask the main admin to set a new one. The main admin can change their password under **My Account** or request recovery from the staff login page. Disabling an account ends its API access, including for an existing login token.
 
-Forgot-password links are available from customer and staff sign-in pages. They expire after 30 minutes, are single-use, and the site gives the same response whether an account exists. Admin and staff sign-ins also require a one-time email code. The owner code and reset links go to `OWNER_ADMIN_EMAIL` (defaults to `nishandhungana939@gmail.com`); staff codes and reset links go to each staff account's recovery email. Configure `FRONTEND_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` in `backend/.env` using credentials from an email-sending service. Until SMTP is configured, sign-in codes and password reset links cannot be delivered.
+Customers can request a password reset from `/forgot-password`. Main-admin recovery is available from the staff login page and sends a code/link to `OWNER_ADMIN_EMAIL` (defaults to `nishandhungana939@gmail.com`). Staff passwords are reset by the main admin in **Staff Access**. Owner and staff sign-ins also require a one-time email code, sent to the owner's recovery email or the staff member's recovery email. Reset links expire after 30 minutes and can only be used once. Configure `FRONTEND_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` in `backend/.env` using credentials from an email-sending service. Until SMTP is configured, codes and password reset links cannot be delivered.
 
 Apply checked-in migrations from `backend` with `npx prisma migrate dev` for a local database. Production deployments should apply them with `npx prisma migrate deploy`.
+
+Database model tests create and delete records. They require a separate `TEST_DATABASE_URL` and reject the same URL as `DATABASE_URL`. By default, only a loopback test database is allowed; using a dedicated remote test database requires explicitly setting `ALLOW_REMOTE_TEST_DATABASE=true`. Never point tests at the production database. See [backend/TESTING.md](backend/TESTING.md).
 
 ## Production deployment
 

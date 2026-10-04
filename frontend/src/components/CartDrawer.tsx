@@ -2,8 +2,10 @@
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../contexts/CartContext";
 import { FREE_DELIVERY_THRESHOLD, DELIVERY_CHARGE } from "../types";
+import { useLanguage } from "../i18n/LanguageContext";
 
 export default function CartDrawer() {
+  const { t } = useLanguage();
   const {
     items, isOpen, closeCart, removeItem, updateQty,
     subtotal, deliveryCharge: _deliveryCharge, total, isFreeDelivery, amountUntilFreeDelivery, itemCount,
@@ -46,7 +48,7 @@ export default function CartDrawer() {
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <span className="text-xl">🛒</span>
-            <h2 className="font-bold text-gray-900 text-lg">Your Cart</h2>
+            <h2 className="font-bold text-gray-900 text-lg">{t("Your Cart")}</h2>
             {itemCount > 0 && (
               <span className="bg-brand-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                 {itemCount}
@@ -67,12 +69,12 @@ export default function CartDrawer() {
           <div className="px-5 py-3 bg-brand-50 border-b border-brand-100">
             {isFreeDelivery ? (
               <p className="text-sm text-brand-700 font-semibold flex items-center gap-1">
-                🎉 You get free delivery!
+                🎉 {t("You get free delivery!")}
               </p>
             ) : (
               <div>
                 <p className="text-xs text-gray-600 mb-1.5">
-                  Add <span className="font-bold text-brand-600">NPR {amountUntilFreeDelivery.toLocaleString("en-NP")}</span> more for free delivery
+                  {t("Add")} <span className="font-bold text-brand-600">NPR {amountUntilFreeDelivery.toLocaleString("en-NP")}</span> {t("more for free delivery")}
                 </p>
                 <div className="h-1.5 bg-brand-200 rounded-full overflow-hidden">
                   <div
@@ -80,7 +82,7 @@ export default function CartDrawer() {
                     style={{ width: `${Math.min(100, (subtotal / FREE_DELIVERY_THRESHOLD) * 100)}%` }}
                   />
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Free delivery on orders over NPR {FREE_DELIVERY_THRESHOLD}</p>
+                <p className="text-xs text-gray-400 mt-1">{t("Free delivery on orders over NPR 500")}</p>
               </div>
             )}
           </div>
@@ -91,13 +93,13 @@ export default function CartDrawer() {
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-center py-12">
               <span className="text-5xl">🛍️</span>
-              <p className="font-semibold text-gray-700">Your cart is empty</p>
-              <p className="text-sm text-gray-400">Add products to start your order</p>
+              <p className="font-semibold text-gray-700">{t("Your cart is empty")}</p>
+              <p className="text-sm text-gray-400">{t("Add products to start your order")}</p>
               <button
                 onClick={() => { closeCart(); navigate("/products"); }}
                 className="btn-primary mt-2"
               >
-                Browse Products
+                {t("Browse Products")}
               </button>
             </div>
           ) : (
@@ -146,7 +148,7 @@ export default function CartDrawer() {
                     className="text-xs text-red-400 hover:text-red-600 transition-colors"
                     aria-label={`Remove ${item.name}`}
                   >
-                    Remove
+                    {t("Remove")}
                   </button>
                 </div>
               </div>
@@ -160,17 +162,17 @@ export default function CartDrawer() {
             {/* Totals */}
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between text-gray-600">
-                <span>Subtotal ({itemCount} items)</span>
+              <span>{t("Subtotal")} ({itemCount} items)</span>
                 <span>NPR {subtotal.toLocaleString("en-NP")}</span>
               </div>
               <div className="flex justify-between text-gray-600">
-                <span>Delivery</span>
+                <span>{t("Delivery")}</span>
                 <span className={isFreeDelivery ? "text-green-600 font-semibold" : ""}>
                   {isFreeDelivery ? "FREE" : `NPR ${DELIVERY_CHARGE}`}
                 </span>
               </div>
               <div className="flex justify-between font-bold text-base text-gray-900 pt-2 border-t border-gray-100">
-                <span>Total</span>
+                <span>{t("Total")}</span>
                 <span className="text-brand-600">NPR {total.toLocaleString("en-NP")}</span>
               </div>
             </div>
@@ -180,7 +182,7 @@ export default function CartDrawer() {
               onClick={() => { closeCart(); navigate("/checkout"); }}
               className="btn-primary w-full py-3.5 text-base rounded-xl"
             >
-              Proceed to Checkout →
+              {t("Proceed to Checkout →")}
             </button>
           </div>
         )}

@@ -6,6 +6,7 @@ import { FREE_DELIVERY_THRESHOLD, DELIVERY_CHARGE } from "../types";
 interface CartState {
   items: CartItem[];
   isOpen: boolean;
+  cartNotice: string | null;
 }
 
 // ─── Actions ──────────────────────────────────────────────
@@ -17,6 +18,7 @@ type CartAction =
   | { type: "CLEAR" }
   | { type: "OPEN_DRAWER" }
   | { type: "CLOSE_DRAWER" }
+  | { type: "CLEAR_NOTICE" }
   | { type: "LOAD"; items: CartItem[] };
 
 // ─── Reducer ──────────────────────────────────────────────
@@ -48,7 +50,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
           },
         ];
       }
-      return { ...state, items, isOpen: true };
+      return { ...state, items, cartNotice: `${product.name} added to your cart` };
     }
 
     case "REMOVE_ITEM":
@@ -85,13 +87,16 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     }
 
     case "CLEAR":
-      return { ...state, items: [] };
+      return { ...state, items: [], cartNotice: null };
 
     case "OPEN_DRAWER":
       return { ...state, isOpen: true };
 
     case "CLOSE_DRAWER":
       return { ...state, isOpen: false };
+
+    case "CLEAR_NOTICE":
+      return { ...state, cartNotice: null };
 
     default:
       return state;
@@ -102,6 +107,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
 interface CartContextType {
   items: CartItem[];
   isOpen: boolean;
+  cartNotice: string | null;
   addItem: (product: Product, quantity?: number) => void;
   removeItem: (productId: string) => void;
   updateQty: (productId: string, quantity: number) => void;
@@ -109,6 +115,7 @@ interface CartContextType {
   clearCart: () => void;
   openCart: () => void;
   closeCart: () => void;
+  clearCartNotice: () => void;
   itemCount: number;
   subtotal: number;
   deliveryCharge: number;
@@ -122,7 +129,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 const STORAGE_KEY = "bd_cart";
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(cartReducer, { items: [], isOpen: false });
+  const [state, dispatch] = useReducer(cartReducer, { items: [], isOpen: false, cartNotice: null });
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -159,6 +166,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       value={{
         items: state.items,
         isOpen: state.isOpen,
+        cartNotice: state.cartNotice,
         addItem: (product, quantity) => dispatch({ type: "ADD_ITEM", product, quantity }),
         removeItem: (productId) => dispatch({ type: "REMOVE_ITEM", productId }),
         updateQty: (productId, quantity) => dispatch({ type: "UPDATE_QTY", productId, quantity }),
@@ -166,6 +174,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         clearCart: () => dispatch({ type: "CLEAR" }),
         openCart: () => dispatch({ type: "OPEN_DRAWER" }),
         closeCart: () => dispatch({ type: "CLOSE_DRAWER" }),
+        clearCartNotice: () => dispatch({ type: "CLEAR_NOTICE" }),
         itemCount,
         subtotal,
         deliveryCharge,

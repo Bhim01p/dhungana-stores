@@ -52,7 +52,7 @@ export default function OrderConfirmationPage() {
             {[
               { step: "1", icon: "📱", text: order.paymentStatus === "CONFIRMED" ? "Payment received; we are preparing your order" : "We will confirm the order and payment with you" },
               { step: "2", icon: "📦", text: "Your order is prepared and packed" },
-              { step: "3", icon: "🚚", text: "Delivery to your address" },
+              { step: "3", icon: order.fulfillmentType === "PICKUP" ? "🏪" : "🚚", text: order.fulfillmentType === "PICKUP" ? "Your order will be ready for pickup" : "Delivery to your address" },
             ].map(({ step, icon, text }) => (
               <div key={step} className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-brand-500 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">
@@ -94,7 +94,10 @@ export default function OrderConfirmationPage() {
 
         {/* Delivery info */}
         <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600 space-y-1">
-          <p><span className="font-medium">Delivering to:</span> {order.address}</p>
+          <p><span className="font-medium">{order.fulfillmentType === "PICKUP" ? "Pickup at:" : "Delivering to:"}</span> {order.fulfillmentType === "PICKUP" ? "Bishnu & Dhungana Stores" : order.address}</p>
+          {order.deliveryArea && <p><span className="font-medium">Area:</span> {order.deliveryArea.name}</p>}
+          {order.deliveryDate && <p><span className="font-medium">Date:</span> {new Date(`${order.deliveryDate.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-NP", { timeZone: "UTC", weekday: "long", month: "short", day: "numeric" })}</p>}
+          {order.deliverySlot && <p><span className="font-medium">Time:</span> {order.deliverySlot.label}</p>}
           {order.landmark && <p><span className="font-medium">Landmark:</span> {order.landmark}</p>}
           <p><span className="font-medium">Contact:</span> {order.phone}</p>
         </div>

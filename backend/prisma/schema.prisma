@@ -47,9 +47,56 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum OrderFulfillmentType {
+  DELIVERY
+  PICKUP
+}
+
 enum PasswordResetAccountType {
   CUSTOMER
   ADMIN
+}
+
+enum SupportMessageType {
+  HELP
+  COMPLAINT
+  REVIEW
+  OTHER
+}
+
+enum SupportMessageStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum StoreSalePaymentType {
+  CASH
+  QR
+}
+
+enum StoreSaleStatus {
+  COMPLETED
+  VOIDED
+  REFUNDED
+}
+
+enum StoreSaleKind {
+  SALE
+  HOUSE_USE
+}
+
+enum InventoryMovementType {
+  INITIAL_STOCK
+  RESTOCK
+  ADJUSTMENT
+  ONLINE_ORDER
+  ONLINE_CANCELLED
+  STORE_SALE
+  STORE_VOID
+  STORE_REFUND
+  HOUSE_USE
+  EXPIRED
 }
 
 // ---------------------------------------------
@@ -57,26 +104,68 @@ enum PasswordResetAccountType {
 // ---------------------------------------------
 
 model AdminUser {
-  id        String    @id @default(cuid())
-  username  String    @unique
-  recoveryEmail String? @unique @map("recovery_email")
-  password  String
-  role      AdminRole @default(ADMIN)
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  loginChallenges AdminLoginChallenge[]
+  id                 String                @id @default(cuid())
+  username           String                @unique
+  recoveryEmail      String?               @unique @map("recovery_email")
+  imageUrl           String?               @map("image_url")
+  password           String
+  role               AdminRole             @default(ADMIN)
+  permissions        String[]              @default([])
+  active             Boolean               @default(true)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  loginChallenges    AdminLoginChallenge[]
+  storeSales         StoreSale[]
+  inventoryMovements InventoryMovement[]
+  auditLogs          AdminAuditLog[]
+  cashDrawerClosings CashDrawerClosing[]
+  supportReplies     SupportMessageReply[]
 
   @@map("admin_users")
 }
 
+model SupportMessage {
+  id         String                @id @default(cuid())
+  type       SupportMessageType
+  status     SupportMessageStatus  @default(NEW)
+  name       String
+  email      String?
+  phone      String?
+  subject    String
+  message    String                @db.Text
+  rating     Int?
+  customerId String?               @map("customer_id")
+  customer   Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  replies    SupportMessageReply[]
+  createdAt  DateTime              @default(now()) @map("created_at")
+  updatedAt  DateTime              @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("support_messages")
+}
+
+model SupportMessageReply {
+  id               String         @id @default(cuid())
+  supportMessageId String         @map("support_message_id")
+  supportMessage   SupportMessage @relation(fields: [supportMessageId], references: [id], onDelete: Cascade)
+  adminUserId      String?        @map("admin_user_id")
+  adminUser        AdminUser?     @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+  responderName    String         @map("responder_name")
+  body             String         @db.Text
+  createdAt        DateTime       @default(now()) @map("created_at")
+  emailSentAt      DateTime?      @map("email_sent_at")
+
+  @@index([supportMessageId, createdAt])
+  @@map("support_message_replies")
+}
+
 model AdminLoginChallenge {
-  id          String   @id
-  adminUserId String   @map("admin_user_id")
-  codeHash    String   @map("code_hash")
-  attempts    Int      @default(0)
-  expiresAt   DateTime @map("expires_at")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id          String    @id
+  adminUserId String    @map("admin_user_id")
+  codeHash    String    @map("code_hash")
+  attempts    Int       @default(0)
+  expiresAt   DateTime  @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
   adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
 
   @@index([adminUserId, expiresAt])
@@ -88,28 +177,31 @@ model AdminLoginChallenge {
 // ---------------------------------------------
 
 model Customer {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  phone     String   @unique
-  password  String   // bcrypt hash
+  id                String    @id @default(cuid())
+  name              String
+  email             String    @unique
+  phone             String    @unique
+  imageUrl          String?   @map("image_url")
+  password          String // bcrypt hash
   passwordChangedAt DateTime? @map("password_changed_at")
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  active            Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  orders    Order[]
+  orders          Order[]
+  favorites       CustomerFavorite[]
+  supportMessages SupportMessage[]
 
   @@map("customers")
 }
 
 model PasswordResetToken {
-  id          String                  @id @default(cuid())
-  tokenHash   String                  @unique @map("token_hash")
+  id          String                   @id @default(cuid())
+  tokenHash   String                   @unique @map("token_hash")
   accountType PasswordResetAccountType @map("account_type")
-  accountId   String                  @map("account_id")
-  expiresAt   DateTime                @map("expires_at")
-  createdAt   DateTime                @default(now()) @map("created_at")
+  accountId   String                   @map("account_id")
+  expiresAt   DateTime                 @map("expires_at")
+  createdAt   DateTime                 @default(now()) @map("created_at")
 
   @@index([accountType, accountId])
   @@map("password_reset_tokens")
@@ -120,20 +212,20 @@ model PasswordResetToken {
 // ---------------------------------------------
 
 model Category {
-  id          String    @id @default(cuid())
-  name        String    @unique
-  slug        String    @unique
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
   description String?
-  imageUrl    String?   @map("image_url")
-  active      Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  imageUrl    String?  @map("image_url")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  parentId    String?
-  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children    Category[] @relation("CategoryTree")
+  parentId String?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children Category[] @relation("CategoryTree")
 
-  products    Product[]
+  products Product[]
 
   @@index([parentId])
   @@map("categories")
@@ -144,27 +236,179 @@ model Category {
 // ---------------------------------------------
 
 model Product {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   name              String
-  slug              String   @unique
+  slug              String    @unique
   description       String?
   brand             String?
-  sku               String?  @unique
-  price             Decimal  @db.Decimal(10, 2)
+  sku               String?   @unique
+  price             Decimal   @db.Decimal(10, 2)
   unit              Unit
-  stockQuantity     Int      @default(0)
-  lowStockThreshold Int      @default(10)
+  stockQuantity     Int       @default(0)
+  lowStockThreshold Int       @default(10)
+  supplierName      String?   @map("supplier_name")
+  expiresAt         DateTime? @map("expires_at") @db.Date
   image             String?
-  active            Boolean  @default(true)
-  featured          Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  images            String[]  @default([])
+  active            Boolean   @default(true)
+  featured          Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  categoryId  String
-  category    Category    @relation(fields: [categoryId], references: [id])
-  orderItems  OrderItem[]
+  categoryId         String
+  category           Category            @relation(fields: [categoryId], references: [id])
+  orderItems         OrderItem[]
+  storeSaleItems     StoreSaleItem[]
+  inventoryMovements InventoryMovement[]
+  favoritedBy        CustomerFavorite[]
 
   @@map("products")
+}
+
+model CustomerFavorite {
+  id         String   @id @default(cuid())
+  customerId String   @map("customer_id")
+  productId  String   @map("product_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, productId])
+  @@index([customerId, createdAt])
+  @@map("customer_favorites")
+}
+
+model StoreSale {
+  id              String                @id @default(cuid())
+  saleNumber      String                @unique @map("sale_number")
+  cashierId       String?               @map("cashier_id")
+  cashierName     String                @map("cashier_name")
+  cashier         AdminUser?            @relation(fields: [cashierId], references: [id], onDelete: SetNull)
+  customerName    String?               @map("customer_name")
+  customerPhone   String?               @map("customer_phone")
+  subtotal        Decimal               @db.Decimal(10, 2)
+  total           Decimal               @db.Decimal(10, 2)
+  paymentType     StoreSalePaymentType? @map("payment_type")
+  saleKind        StoreSaleKind         @default(SALE) @map("sale_kind")
+  tenderedAmount  Decimal?              @map("tendered_amount") @db.Decimal(10, 2)
+  changeAmount    Decimal?              @map("change_amount") @db.Decimal(10, 2)
+  status          StoreSaleStatus       @default(COMPLETED)
+  statusReason    String?               @map("status_reason") @db.Text
+  statusChangedBy String?               @map("status_changed_by")
+  statusChangedAt DateTime?             @map("status_changed_at")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+  items           StoreSaleItem[]
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([statusChangedAt])
+  @@map("store_sales")
+}
+
+model StoreSaleItem {
+  id          String    @id @default(cuid())
+  productId   String?   @map("product_id")
+  product     Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName String    @map("product_name")
+  unit        Unit
+  quantity    Int
+  unitPrice   Decimal   @map("unit_price") @db.Decimal(10, 2)
+  subtotal    Decimal   @db.Decimal(10, 2)
+  saleId      String    @map("sale_id")
+  sale        StoreSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@map("store_sale_items")
+}
+
+model InventoryMovement {
+  id             String                @id @default(cuid())
+  productId      String?               @map("product_id")
+  product        Product?              @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName    String                @map("product_name")
+  type           InventoryMovementType
+  quantityChange Int                   @map("quantity_change")
+  stockAfter     Int                   @map("stock_after")
+  reason         String?               @db.Text
+  reference      String?
+  unitCost       Decimal?              @map("unit_cost") @db.Decimal(10, 2)
+  actorId        String?               @map("actor_id")
+  actor          AdminUser?            @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  @@index([productId, createdAt])
+  @@index([type, createdAt])
+  @@map("inventory_movements")
+}
+
+model AdminAuditLog {
+  id        String     @id @default(cuid())
+  actorId   String?    @map("actor_id")
+  actor     AdminUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?    @map("entity_id")
+  summary   String
+  metadata  Json?
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@map("admin_audit_logs")
+}
+
+model DeliveryArea {
+  id                    String   @id @default(cuid())
+  name                  String
+  deliveryCharge        Decimal  @default(50) @map("delivery_charge") @db.Decimal(10, 2)
+  freeDeliveryThreshold Decimal  @default(500) @map("free_delivery_threshold") @db.Decimal(10, 2)
+  active                Boolean  @default(true)
+  sortOrder             Int      @default(0) @map("sort_order")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  orders                Order[]
+
+  @@index([active, sortOrder])
+  @@map("delivery_areas")
+}
+
+model DeliverySlot {
+  id        String   @id @default(cuid())
+  label     String
+  startTime String   @map("start_time")
+  endTime   String   @map("end_time")
+  weekdays  Int[]    @default([])
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  orders    Order[]
+
+  @@index([active, sortOrder])
+  @@map("delivery_slots")
+}
+
+model CashDrawerClosing {
+  id           String     @id @default(cuid())
+  businessDate DateTime   @unique @map("business_date") @db.Date
+  openingCash  Decimal    @map("opening_cash") @db.Decimal(10, 2)
+  cashSales    Decimal    @map("cash_sales") @db.Decimal(10, 2)
+  qrSales      Decimal    @map("qr_sales") @db.Decimal(10, 2)
+  cashRefunds  Decimal    @default(0) @map("cash_refunds") @db.Decimal(10, 2)
+  cashVoids    Decimal    @default(0) @map("cash_voids") @db.Decimal(10, 2)
+  paidIn       Decimal    @default(0) @map("paid_in") @db.Decimal(10, 2)
+  paidOut      Decimal    @default(0) @map("paid_out") @db.Decimal(10, 2)
+  expectedCash Decimal    @map("expected_cash") @db.Decimal(10, 2)
+  countedCash  Decimal    @map("counted_cash") @db.Decimal(10, 2)
+  variance     Decimal    @db.Decimal(10, 2)
+  notes        String?    @db.Text
+  closedById   String?    @map("closed_by_id")
+  closedBy     AdminUser? @relation(fields: [closedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@index([closedById])
+  @@map("cash_drawer_closings")
 }
 
 // ---------------------------------------------
@@ -172,32 +416,38 @@ model Product {
 // ---------------------------------------------
 
 model Order {
-  id             String        @id @default(cuid())
-  orderNumber    String        @unique
-  guestLookupTokenHash String? @unique @map("guest_lookup_token_hash")
-  stockReserved  Boolean       @default(false) @map("stock_reserved")
-  customerName   String
-  phone          String
-  email          String?
-  address        String
-  landmark       String?
-  notes          String?
-  subtotal       Decimal       @db.Decimal(10, 2)
-  deliveryCharge Decimal       @default(0) @db.Decimal(10, 2)
-  total          Decimal       @db.Decimal(10, 2)
-  paymentStatus  PaymentStatus @default(PENDING)
-  orderStatus    OrderStatus   @default(PENDING)
-  paymentMethodName         String? @map("payment_method_name")
-  paymentMethodQrImageUrl   String? @map("payment_method_qr_image_url")
-  paymentMethodAccountInfo  String? @map("payment_method_account_info")
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id                       String               @id @default(cuid())
+  orderNumber              String               @unique
+  guestLookupTokenHash     String?              @unique @map("guest_lookup_token_hash")
+  stockReserved            Boolean              @default(false) @map("stock_reserved")
+  customerName             String
+  phone                    String
+  email                    String?
+  address                  String
+  fulfillmentType          OrderFulfillmentType @default(DELIVERY) @map("fulfillment_type")
+  deliveryAreaId           String?              @map("delivery_area_id")
+  deliveryArea             DeliveryArea?        @relation(fields: [deliveryAreaId], references: [id], onDelete: SetNull)
+  deliveryDate             DateTime?            @map("delivery_date") @db.Date
+  deliverySlotId           String?              @map("delivery_slot_id")
+  deliverySlot             DeliverySlot?        @relation(fields: [deliverySlotId], references: [id], onDelete: SetNull)
+  landmark                 String?
+  notes                    String?
+  subtotal                 Decimal              @db.Decimal(10, 2)
+  deliveryCharge           Decimal              @default(0) @db.Decimal(10, 2)
+  total                    Decimal              @db.Decimal(10, 2)
+  paymentStatus            PaymentStatus        @default(PENDING)
+  orderStatus              OrderStatus          @default(PENDING)
+  paymentMethodName        String?              @map("payment_method_name")
+  paymentMethodQrImageUrl  String?              @map("payment_method_qr_image_url")
+  paymentMethodAccountInfo String?              @map("payment_method_account_info")
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
 
   // Optional link to a registered customer
-  customerId  String?
-  customer    Customer? @relation(fields: [customerId], references: [id])
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
 
-  orderItems  OrderItem[]
+  orderItems OrderItem[]
 
   @@map("orders")
 }
@@ -215,8 +465,8 @@ model OrderItem {
   subtotal    Decimal  @db.Decimal(10, 2)
   createdAt   DateTime @default(now())
 
-  orderId   String
-  order     Order    @relation(fields: [orderId], references: [id])
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
 
   productId String?
   product   Product? @relation(fields: [productId], references: [id])

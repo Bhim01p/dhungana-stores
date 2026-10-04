@@ -29,7 +29,9 @@ export async function requestPasswordReset(type: ResetAccountType, email: string
   }
   const account = type === 'CUSTOMER'
     ? await prisma.customer.findUnique({ where: { email: normalizedEmail }, select: { id: true, active: true, email: true } })
-    : await prisma.adminUser.findFirst({ where: { recoveryEmail: { equals: normalizedEmail, mode: 'insensitive' } }, select: { id: true, active: true, recoveryEmail: true, role: true } });
+    : normalizedEmail === env.OWNER_ADMIN_EMAIL.trim().toLowerCase()
+      ? await prisma.adminUser.findFirst({ where: { role: 'ADMIN', recoveryEmail: { equals: normalizedEmail, mode: 'insensitive' } }, select: { id: true, active: true, recoveryEmail: true, role: true } })
+      : null;
 
   if (!account || !account.active) return;
   const destination = type === 'CUSTOMER'
@@ -90,7 +92,7 @@ export async function completePasswordReset(type: ResetAccountType, rawToken: st
       const result = await tx.customer.updateMany({ where: { id: record.accountId, active: true }, data: { password: passwordHash, passwordChangedAt: new Date() } });
       if (result.count !== 1) throw Object.assign(new Error('This reset link is invalid or has expired.'), { statusCode: 400 });
     } else {
-      const result = await tx.adminUser.updateMany({ where: { id: record.accountId, active: true }, data: { password: passwordHash } });
+      const result = await tx.adminUser.updateMany({ where: { id: record.accountId, active: true, role: 'ADMIN', recoveryEmail: { equals: env.OWNER_ADMIN_EMAIL.trim().toLowerCase(), mode: 'insensitive' } }, data: { password: passwordHash } });
       if (result.count !== 1) throw Object.assign(new Error('This reset link is invalid or has expired.'), { statusCode: 400 });
     }
     await tx.passwordResetToken.deleteMany({ where: { accountType: type, accountId: record.accountId } });

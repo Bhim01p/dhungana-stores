@@ -9,6 +9,7 @@ export interface JwtPayload {
   sub: string;       // AdminUser id
   username: string;
   role: AdminRole;
+  permissions?: string[];
   iat?: number;
 }
 

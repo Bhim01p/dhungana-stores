@@ -17,6 +17,9 @@ export const env = {
   SMTP_USER: process.env.SMTP_USER ?? '',
   SMTP_PASSWORD: process.env.SMTP_PASSWORD ?? '',
   SMTP_FROM: process.env.SMTP_FROM ?? '',
+  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ?? '',
+  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY ?? '',
+  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ?? '',
   TRUST_PROXY_HOPS: parseInt(process.env.TRUST_PROXY_HOPS ?? '0', 10),
 } as const;
 

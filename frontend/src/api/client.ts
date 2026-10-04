@@ -1,4 +1,5 @@
 // Base API client — all requests go through here
+import { readApiResponse } from "./readResponse";
 
 const BASE_URL = '/api';
 
@@ -8,14 +9,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
   });
 
-  const data = await res.json();
-
-  if (!res.ok) {
-    const message = (data as { error?: string }).error ?? 'An unexpected error occurred.';
-    throw new Error(message);
-  }
-
-  return data as T;
+  return readApiResponse<T>(res, path);
 }
 
 export const apiClient = {

@@ -50,7 +50,7 @@ export async function updateOrderStatus(req: Request, res: Response, next: NextF
     const existing = await adminOrderService.getOne(String(req.params.id));
     if (!existing) { res.status(404).json({ error: 'Order not found.' }); return; }
 
-    const order = await adminOrderService.updateStatus(String(req.params.id), orderStatus as OrderStatus);
+    const order = await adminOrderService.updateStatus(String(req.params.id), orderStatus as OrderStatus, req.admin?.sub);
     res.status(200).json(order);
   } catch (err) {
     next(err);
@@ -70,7 +70,7 @@ export async function updatePaymentStatus(req: Request, res: Response, next: Nex
     const existing = await adminOrderService.getOne(String(req.params.id));
     if (!existing) { res.status(404).json({ error: 'Order not found.' }); return; }
 
-    const order = await adminOrderService.updatePaymentStatus(String(req.params.id), paymentStatus as PaymentStatus);
+    const order = await adminOrderService.updatePaymentStatus(String(req.params.id), paymentStatus as PaymentStatus, req.admin?.sub);
     res.status(200).json(order);
   } catch (err) {
     next(err);

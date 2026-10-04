@@ -41,7 +41,7 @@ export const customerService = {
         phone: data.phone.trim(),
         password: passwordHash,
       },
-      select: { id: true, name: true, email: true, phone: true, createdAt: true },
+      select: { id: true, name: true, email: true, phone: true, imageUrl: true, createdAt: true },
     });
 
     const token = signCustomerToken({ sub: customer.id, email: customer.email, type: "customer" });
@@ -63,14 +63,14 @@ export const customerService = {
     const token = signCustomerToken({ sub: customer.id, email: customer.email, type: "customer" });
     return {
       token,
-      customer: { id: customer.id, name: customer.name, email: customer.email, phone: customer.phone },
+      customer: { id: customer.id, name: customer.name, email: customer.email, phone: customer.phone, imageUrl: customer.imageUrl },
     };
   },
 
   async getProfile(customerId: string) {
     return prisma.customer.findUnique({
       where: { id: customerId },
-      select: { id: true, name: true, email: true, phone: true, createdAt: true },
+      select: { id: true, name: true, email: true, phone: true, imageUrl: true, createdAt: true },
     });
   },
 
@@ -78,18 +78,81 @@ export const customerService = {
     return prisma.order.findMany({
       where: { customerId },
       orderBy: { createdAt: "desc" },
-      include: { orderItems: true },
+      include: { orderItems: true, deliveryArea: { select: { name: true } }, deliverySlot: { select: { label: true } } },
     });
   },
 
-  async updateProfile(customerId: string, data: { name?: string; phone?: string }) {
+  async getFavorites(customerId: string) {
+    const rows = await prisma.customerFavorite.findMany({
+      where: { customerId, product: { active: true, category: { active: true, OR: [{ parentId: null }, { parent: { active: true } }] } } },
+      orderBy: { createdAt: "desc" },
+      include: {
+        product: { include: { category: { select: {
+          id: true, name: true, slug: true, parentId: true,
+          parent: { select: { id: true, name: true, slug: true } },
+        } } } },
+      },
+    });
+    return rows.map(({ product }) => {
+      const { supplierName: _supplierName, expiresAt: _expiresAt, ...publicProduct } = product;
+      return publicProduct;
+    });
+  },
+
+  async addFavorite(customerId: string, productId: string) {
+    const product = await prisma.product.findFirst({
+      where: { id: productId, active: true, category: { active: true, OR: [{ parentId: null }, { parent: { active: true } }] } },
+      select: { id: true },
+    });
+    if (!product) throw Object.assign(new Error("This product is no longer available."), { statusCode: 404 });
+    await prisma.customerFavorite.upsert({
+      where: { customerId_productId: { customerId, productId } },
+      create: { customerId, productId },
+      update: {},
+    });
+    return { productId };
+  },
+
+  async removeFavorite(customerId: string, productId: string) {
+    await prisma.customerFavorite.deleteMany({ where: { customerId, productId } });
+    return { productId };
+  },
+
+  async getReorderProducts(customerId: string, orderId: string) {
+    const order = await prisma.order.findFirst({
+      where: { id: orderId, customerId },
+      include: { orderItems: true },
+    });
+    if (!order) throw Object.assign(new Error("Order not found."), { statusCode: 404 });
+    const ids = [...new Set(order.orderItems.map((item) => item.productId).filter((id): id is string => Boolean(id)))];
+    const products = await prisma.product.findMany({
+      where: { id: { in: ids }, active: true, stockQuantity: { gt: 0 }, category: { active: true, OR: [{ parentId: null }, { parent: { active: true } }] } },
+      include: { category: { select: { id: true, name: true, slug: true, parentId: true, parent: { select: { id: true, name: true, slug: true } } } } },
+    });
+    const byId = new Map(products.map((product) => [product.id, product]));
+    const available: Array<{ product: (typeof products)[number]; quantity: number; limited: boolean }> = [];
+    const unavailable: string[] = [];
+    for (const item of order.orderItems) {
+      const product = item.productId ? byId.get(item.productId) : undefined;
+      if (!product) { unavailable.push(item.productName); continue; }
+      const quantity = Math.min(item.quantity, product.stockQuantity);
+      available.push({ product, quantity, limited: quantity < item.quantity });
+    }
+    return { items: available.map(({ product, quantity, limited }) => {
+      const { supplierName: _supplierName, expiresAt: _expiresAt, ...publicProduct } = product;
+      return { product: publicProduct, quantity, limited };
+    }), unavailable };
+  },
+
+  async updateProfile(customerId: string, data: { name?: string; phone?: string; imageUrl?: string | null }) {
     return prisma.customer.update({
       where: { id: customerId },
       data: {
         ...(data.name && { name: data.name.trim() }),
         ...(data.phone && { phone: data.phone.trim() }),
+        ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
       },
-      select: { id: true, name: true, email: true, phone: true, createdAt: true },
+      select: { id: true, name: true, email: true, phone: true, imageUrl: true, createdAt: true },
     });
   },
 

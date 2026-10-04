@@ -4,8 +4,10 @@
   "description": "Backend API for Bishnu and Dhungana Stores",
   "main": "dist/server.js",
   "scripts": {
+    "predev": "prisma generate",
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc",
+    "prestart": "prisma generate",
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",

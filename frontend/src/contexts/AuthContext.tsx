@@ -1,9 +1,13 @@
 ﻿import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+import { readApiResponse } from '../api/readResponse';
+
 interface AdminUser {
   id: string;
   username: string;
   role: string;
+  permissions?: string[];
+  imageUrl?: string | null;
 }
 
 interface LoginChallenge {
@@ -19,6 +23,7 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<LoginChallenge>;
   verifyLoginCode: (challengeId: string, code: string) => Promise<void>;
   logout: () => void;
+  syncUser: (updates: Partial<AdminUser>, replacementToken?: string) => void;
   refreshToken: () => Promise<void>;
   error: string | null;
 }
@@ -37,8 +42,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedToken = sessionStorage.getItem('adminToken');
     const storedUser = sessionStorage.getItem('adminUser');
     if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      try {
+        const parsed = JSON.parse(storedUser) as AdminUser;
+        if (!parsed || typeof parsed.id !== 'string' || typeof parsed.username !== 'string') throw new Error('Invalid saved session');
+        setToken(storedToken);
+        setUser(parsed);
+      } catch {
+        sessionStorage.removeItem('adminToken');
+        sessionStorage.removeItem('adminUser');
+      }
     }
     setIsLoading(false);
   }, []);
@@ -51,8 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Login failed');
+      const data = await readApiResponse<LoginChallenge>(res, '/auth/login');
       if (!data.challengeId || !data.emailHint) throw new Error('The sign-in code could not be started. Please try again.');
       return data as LoginChallenge;
     } catch (err: any) {
@@ -69,8 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ challengeId, code }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Code verification failed');
+      const data = await readApiResponse<{ token: string; admin: AdminUser }>(res, '/auth/verify-login-code');
       sessionStorage.setItem('adminToken', data.token);
       sessionStorage.setItem('adminUser', JSON.stringify(data.admin));
       setToken(data.token);
@@ -93,13 +103,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch('/api/auth/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('Session expired');
-      setUser(await res.json());
+      const updated = await readApiResponse<AdminUser>(res, '/auth/me');
+      setUser(updated);
+      sessionStorage.setItem('adminUser', JSON.stringify(updated));
     } catch { logout(); }
   };
 
+  const syncUser = (updates: Partial<AdminUser>, replacementToken?: string) => {
+    if (replacementToken) {
+      sessionStorage.setItem('adminToken', replacementToken);
+      setToken(replacementToken);
+    }
+    setUser(current => {
+      if (!current) return current;
+      const updated = { ...current, ...updates };
+      sessionStorage.setItem('adminUser', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, verifyLoginCode, logout, refreshToken, error }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, verifyLoginCode, logout, syncUser, refreshToken, error }}>
       {children}
     </AuthContext.Provider>
   );

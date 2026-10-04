@@ -6,6 +6,8 @@ import type { Order } from "../types";
 import PaymentQrImage from "../components/PaymentQrImage";
 import LoadingSpinner from "../components/LoadingSpinner";
 import ErrorMessage from "../components/ErrorMessage";
+import { useCart } from "../contexts/CartContext";
+import { useLanguage } from "../i18n/LanguageContext";
 
 const STATUS_STEPS = [
   { key: "PENDING",          label: "Order Received",   icon: "📋" },
@@ -16,6 +18,7 @@ const STATUS_STEPS = [
 ];
 
 function StatusBadge({ status }: { status: string }) {
+  const { t } = useLanguage();
   const colors: Record<string, string> = {
     PENDING:          "bg-yellow-100 text-yellow-800",
     CONFIRMED:        "bg-blue-100 text-blue-800",
@@ -26,14 +29,15 @@ function StatusBadge({ status }: { status: string }) {
   };
   return (
     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${colors[status] ?? "bg-gray-100 text-gray-700"}`}>
-      {status.replace(/_/g," ")}
+      {t(status.replace(/_/g," "))}
     </span>
   );
 }
 
 function OrderStatusTracker({ status }: { status: string }) {
+  const { t } = useLanguage();
   if (status === "CANCELLED") {
-    return <p className="text-sm text-red-600 font-medium mt-2">❌ This order was cancelled.</p>;
+    return <p className="text-sm text-red-600 font-medium mt-2">❌ {t("This order was cancelled.")}</p>;
   }
   const currentIndex = STATUS_STEPS.findIndex(s => s.key === status);
   return (
@@ -51,7 +55,7 @@ function OrderStatusTracker({ status }: { status: string }) {
               </div>
               <p className={`text-[10px] mt-1 text-center leading-tight w-14
                 ${current ? "text-brand-600 font-bold" : done ? "text-brand-400" : "text-gray-400"}`}>
-                {step.label}
+                {t(step.label)}
               </p>
             </div>
             {i < STATUS_STEPS.length - 1 && (
@@ -65,12 +69,13 @@ function OrderStatusTracker({ status }: { status: string }) {
 }
 
 function PaymentQRSection({ order }: { order: Order }) {
+  const { t } = useLanguage();
   return (
     <div className="bg-brand-50 border border-brand-200 rounded-xl p-5 space-y-4">
       <div className="flex items-center gap-2">
         <span className="text-lg">💳</span>
-        <p className="font-semibold text-brand-800">Payment Required</p>
-        <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium">Pending</span>
+        <p className="font-semibold text-brand-800">{t("Payment Required")}</p>
+        <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium">{t("Pending")}</span>
       </div>
       {order.paymentMethodName ? <PaymentQrImage url={order.paymentMethodQrImageUrl} name={order.paymentMethodName} amount={Number(order.total)} accountInfo={order.paymentMethodAccountInfo} /> : <p className="text-sm text-brand-700">No payment method was saved for this order. Contact the store to arrange payment.</p>}
       <p className="text-xs text-brand-600 text-center">After payment, your order will be confirmed manually.</p>
@@ -81,10 +86,27 @@ function PaymentQRSection({ order }: { order: Order }) {
 export default function OrdersPage() {
   const { customerToken, isCustomerLoading } = useCustomerAuth();
   const navigate = useNavigate();
+  const { addItem, openCart } = useCart();
+  const { t } = useLanguage();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [reordering, setReordering] = useState<string | null>(null);
+  const [reorderMessage, setReorderMessage] = useState<string | null>(null);
+
+  async function reorder(orderId: string) {
+    if (!customerToken) return;
+    setReordering(orderId); setReorderMessage(null);
+    try {
+      const result = await customersApi.reorder(customerToken, orderId);
+      result.items.forEach(({ product, quantity }) => addItem(product, quantity));
+      if (!result.items.length) setReorderMessage("None of the products from this order are currently available.");
+      else if (result.unavailable.length || result.items.some((item) => item.limited)) setReorderMessage(t("Some items were unavailable or had lower stock, so the available quantities were added."));
+      else setReorderMessage(t("Reorder added to cart"));
+    } catch (error) { setReorderMessage(error instanceof Error ? error.message : "Could not repeat this order."); }
+    finally { setReordering(null); }
+  }
 
   useEffect(() => {
     if (!isCustomerLoading && !customerToken) navigate("/login", { state: { from: "/orders" } });
@@ -104,9 +126,11 @@ export default function OrdersPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">My Orders</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Track all your past and current orders</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t("My Orders")}</h1>
+        <p className="text-sm text-gray-500 mt-0.5">{t("Track all your past and current orders")}</p>
       </div>
+
+      {reorderMessage && <div role="status" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-800"><span>{reorderMessage}</span><button type="button" onClick={openCart} className="font-bold underline">{t("Your Cart")}</button></div>}
 
       {loadingOrders ? (
         <LoadingSpinner message="Loading orders..." />
@@ -115,8 +139,8 @@ export default function OrdersPage() {
       ) : orders.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
           <span className="text-4xl">📦</span>
-          <p className="text-gray-500 mt-3 font-medium">No orders yet</p>
-          <Link to="/products" className="btn-primary inline-block mt-4 text-sm">Start Shopping</Link>
+          <p className="text-gray-500 mt-3 font-medium">{t("No orders yet")}</p>
+          <Link to="/products" className="btn-primary inline-block mt-4 text-sm">{t("Start Shopping")}</Link>
         </div>
       ) : (
         <div className="space-y-4">
@@ -132,10 +156,10 @@ export default function OrdersPage() {
                   <span className="font-mono text-sm font-bold text-gray-900 shrink-0">{order.orderNumber}</span>
                   <StatusBadge status={order.orderStatus} />
                   {order.paymentStatus === "CONFIRMED" && (
-                    <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-semibold shrink-0">✓ Paid</span>
+                    <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-semibold shrink-0">✓ {t("Paid")}</span>
                   )}
                   {order.paymentStatus === "PENDING" && (
-                    <span className="text-xs bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded-full font-semibold shrink-0">⚠ Payment Pending</span>
+                    <span className="text-xs bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded-full font-semibold shrink-0">⚠ {t("Payment Pending")}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-3 shrink-0 ml-2">
@@ -149,6 +173,10 @@ export default function OrdersPage() {
               {expandedOrder === order.id && (
                 <div className="px-5 pb-6 border-t border-gray-100 space-y-5 pt-4">
 
+                  <button type="button" disabled={reordering === order.id} onClick={() => void reorder(order.id)} className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-60">
+                    {reordering === order.id ? "Adding…" : `↻ ${t("Buy again")}`}
+                  </button>
+
                   {/* Status tracker */}
                   <OrderStatusTracker status={order.orderStatus} />
 
@@ -160,7 +188,7 @@ export default function OrdersPage() {
                   {/* Items */}
                   {order.orderItems && order.orderItems.length > 0 && (
                     <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Items</p>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{t("Items")}</p>
                       <div className="space-y-1.5">
                         {order.orderItems.map(item => (
                           <div key={item.id} className="flex justify-between text-sm text-gray-700">
@@ -192,7 +220,10 @@ export default function OrdersPage() {
 
                   {/* Address */}
                   <div className="bg-gray-50 rounded-lg px-4 py-3 text-sm text-gray-600 space-y-0.5">
-                    <p><span className="font-medium">Delivering to:</span> {order.address}</p>
+                    <p><span className="font-medium">{order.fulfillmentType === "PICKUP" ? t("Pick up at store") : t("Delivering to:")}</span> {order.fulfillmentType === "PICKUP" ? "Bishnu & Dhungana Stores" : order.address}</p>
+                    {order.deliveryArea && <p><span className="font-medium">{t("Delivery area")}:</span> {order.deliveryArea.name}</p>}
+                    {order.deliveryDate && <p><span className="font-medium">{t("Date")}:</span> {new Date(`${order.deliveryDate.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-NP", { timeZone: "UTC", month: "short", day: "numeric" })}</p>}
+                    {order.deliverySlot && <p><span className="font-medium">{t("Time slot")}:</span> {order.deliverySlot.label}</p>}
                     {order.landmark && <p><span className="font-medium">Landmark:</span> {order.landmark}</p>}
                   </div>
                 </div>

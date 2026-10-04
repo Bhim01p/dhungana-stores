@@ -5,17 +5,14 @@
   delete: <T>(path: string, token: string) => request<T>(path, token, { method: "DELETE" }),
 };
 
+import { readApiResponse } from "./readResponse";
+
 async function request<T>(path: string, token: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}`, ...options?.headers },
     ...options
   });
-  const data = await res.json();
-  if (!res.ok) {
-    const message = (data as { error?: string }).error ?? "An unexpected error occurred.";
-    throw new Error(message);
-  }
-  return data as T;
+  return readApiResponse<T>(res, path);
 }
 
 export { adminClient };

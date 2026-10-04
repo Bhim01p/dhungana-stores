@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { productsApi } from '../api/products';
 import { categoriesApi } from '../api/categories';
@@ -8,6 +8,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { useDebounce } from '../hooks/useDebounce';
 import { getCategoryIcon } from '../utils/categoryIcons';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const LIMIT = 12;
 
@@ -16,9 +17,9 @@ type SortKey = 'name_asc' | 'name_desc' | 'price_asc' | 'price_desc';
 function CategoryThumbnail({ category, compact = false }: { category: Category; compact?: boolean }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [category.imageUrl]);
-  const size = compact ? "h-8 w-8" : "h-10 w-10";
+  const size = compact ? "h-7 w-7" : "h-7 w-7 sm:h-8 sm:w-8";
   return (
-    <span className={`${size} flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-50 text-xl`} aria-hidden="true">
+    <span className={`${size} flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-50 text-base sm:text-xl`} aria-hidden="true">
       {category.imageUrl && !failed
         ? <img src={category.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover" onError={() => setFailed(true)} />
         : getCategoryIcon(category.slug, category.name)}
@@ -39,6 +40,8 @@ function sortProducts(products: Product[], sort: SortKey): Product[] {
 }
 
 export default function ProductsPage() {
+  const { t } = useLanguage();
+  const productRequestId = useRef(0);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // URL-driven state
@@ -60,6 +63,12 @@ export default function ProductsPage() {
   // Debounce the text input before firing API
   const debouncedSearch = useDebounce(searchInput, 400);
 
+  useEffect(() => {
+    let cancelled = false;
+    categoriesApi.getAll({ active: true }).then((res) => { if (!cancelled) setCategories(res.data); }).catch(() => { if (!cancelled) setCategories([]); });
+    return () => { cancelled = true; };
+  }, []);
+
   // When debounced value changes, reset to page 1 and push to URL
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
@@ -79,28 +88,26 @@ export default function ProductsPage() {
   }, [urlSearch]);
 
   const fetchProducts = useCallback(async () => {
+    const requestId = ++productRequestId.current;
     setLoading(true);
     setError(null);
     try {
-      const [prodsRes, catsRes] = await Promise.all([
-        productsApi.getAll({
+      const prodsRes = await productsApi.getAll({
           active: true,
           categorySlug,
           featured,
           search: debouncedSearch || undefined,
           page,
           limit: LIMIT,
-        }),
-        categoriesApi.getAll({ active: true }),
-      ]);
+        });
+      if (requestId !== productRequestId.current) return;
       setProducts(prodsRes.data);
       setTotal(prodsRes.meta.total);
       setTotalPages(prodsRes.meta.totalPages);
-      setCategories(catsRes.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load products.');
+      if (requestId === productRequestId.current) setError(err instanceof Error ? err.message : 'Failed to load products.');
     } finally {
-      setLoading(false);
+      if (requestId === productRequestId.current) setLoading(false);
     }
   }, [categorySlug, featured, debouncedSearch, page]);
 
@@ -144,52 +151,36 @@ export default function ProductsPage() {
       <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
 
         {/* ── Sidebar ───────────────────────────────── */}
-        <aside className="w-full shrink-0 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm lg:sticky lg:top-24 lg:h-fit lg:w-60">
-          <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">Shop by category</h2>
+        <aside className="w-full shrink-0 rounded-2xl border border-stone-200 bg-white p-3 shadow-sm sm:p-4 lg:sticky lg:top-24 lg:h-fit lg:w-60">
+          <h2 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500 sm:mb-3">{t("Shop by category")}</h2>
           <nav className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-0">
             <button
               onClick={() => setCategory(undefined)}
-              className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-left text-sm font-semibold transition-colors lg:w-full lg:rounded-xl ${
+              aria-pressed={!categorySlug}
+              className={`flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl border px-2 py-1 text-left text-xs font-semibold transition-colors sm:px-2.5 sm:py-1.5 lg:w-full ${
                 !categorySlug ? 'border-brand-100 bg-brand-50 text-brand-700' : 'border-stone-200 text-stone-600 hover:border-stone-300 hover:bg-stone-50'
               }`}
             >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-xl" aria-hidden="true">🧺</span>
-              <span>All Products</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-sm sm:h-8 sm:w-8 sm:text-base" aria-hidden="true">🧺</span>
+              <span>{t("All Products")}</span>
             </button>
 
             {rootCategories.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setCategory(cat.slug)}
-                className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-left text-sm font-semibold transition-colors lg:w-full lg:rounded-xl ${
+                aria-pressed={selectedRoot?.id === cat.id}
+                className={`flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl border px-2 py-1 text-left text-xs font-semibold transition-colors sm:px-2.5 sm:py-1.5 lg:w-full ${
                   selectedRoot?.id === cat.id
                     ? 'border-brand-100 bg-brand-50 text-brand-700'
                     : 'border-stone-200 text-stone-600 hover:border-stone-300 hover:bg-stone-50'
                 }`}
               >
                 <CategoryThumbnail category={cat} />
-                <span className="truncate flex-1">{cat.name}</span>
+                <span className="truncate flex-1">{t(cat.name)}</span>
               </button>
             ))}
           </nav>
-          {(selectedRoot?.children?.length ?? 0) > 0 && (
-            <div className="mt-4 border-t border-stone-100 pt-4">
-              <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.12em] text-stone-400">{selectedRoot?.name}</p>
-              <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
-                <button
-                  onClick={() => setCategory(selectedRoot?.slug)}
-                  className={`shrink-0 rounded-full px-3 py-2 text-left text-xs font-semibold transition-colors lg:w-full lg:rounded-lg ${categorySlug === selectedRoot?.slug ? 'bg-stone-100 text-stone-900' : 'text-stone-500 hover:bg-stone-50 hover:text-stone-800'}`}
-                >All {selectedRoot?.name}</button>
-                {selectedRoot?.children?.map((child) => (
-                  <button
-                    key={child.id}
-                    onClick={() => setCategory(child.slug)}
-                    className={`shrink-0 rounded-full px-3 py-2 text-left text-xs font-semibold transition-colors lg:w-full lg:rounded-lg ${categorySlug === child.slug ? 'bg-brand-50 text-brand-700' : 'text-stone-500 hover:bg-stone-50 hover:text-stone-800'}`}
-                  ><span className="flex items-center gap-2"><CategoryThumbnail category={child} compact /><span>{child.name}</span></span></button>
-                ))}
-              </div>
-            </div>
-          )}
         </aside>
 
         {/* ── Main content ─────────────────────────── */}
@@ -200,14 +191,14 @@ export default function ProductsPage() {
             <div>
               <h1 className="text-2xl font-extrabold tracking-tight text-stone-900 sm:text-3xl">
                 {categorySlug
-                  ? categories.find((c) => c.slug === categorySlug)?.name ?? 'Products'
+                  ? t(categories.find((c) => c.slug === categorySlug)?.name ?? 'Products')
                   : featured
-                    ? 'Featured Products'
-                    : 'All Products'}
+                    ? t('Featured Products')
+                    : t('All Products')}
               </h1>
               {!loading && (
                 <p className="mt-1 text-sm text-stone-500">
-                  {total} {total === 1 ? 'item' : 'items'} found
+                  {total} {t(total === 1 ? 'item' : 'items')} {t('found')}
                   {debouncedSearch ? ` for "${debouncedSearch}"` : ''}
                 </p>
               )}
@@ -215,16 +206,17 @@ export default function ProductsPage() {
 
             <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
               {/* Search input */}
-              <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">🔍</span>
+              <div className="group relative min-w-0 flex-1 sm:w-64 sm:flex-none">
+                <svg className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400 transition group-focus-within:text-brand-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m16 16 4 4" /></svg>
                 <input
-                  type="search"
+                  type="text"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="Search..."
-                  className="w-full rounded-xl border border-stone-200 bg-white py-2.5 pl-9 pr-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+                  placeholder={t("Search products")}
+                  className="w-full rounded-2xl border border-stone-200 bg-white py-3 pl-10 pr-10 text-sm shadow-sm transition placeholder:text-stone-400 focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100"
                   aria-label="Search products"
                 />
+                {searchInput && <button type="button" onClick={() => setSearchInput("")} aria-label="Clear product search" className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full px-1.5 text-lg leading-none text-stone-400 hover:bg-stone-100 hover:text-stone-700">×</button>}
               </div>
 
               {/* Sort dropdown */}
@@ -232,12 +224,12 @@ export default function ProductsPage() {
                 value={sort}
                 onChange={(e) => setSort(e.target.value as SortKey)}
                 className="w-[7.5rem] shrink-0 cursor-pointer rounded-xl border border-stone-200 bg-white px-2.5 py-2.5 text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-300 sm:w-auto sm:text-sm"
-                aria-label="Sort products"
+                aria-label={t("Sort products")}
               >
-                <option value="name_asc">Name A–Z</option>
-                <option value="name_desc">Name Z–A</option>
-                <option value="price_asc">Price Low–High</option>
-                <option value="price_desc">Price High–Low</option>
+                <option value="name_asc">{t("Name A–Z")}</option>
+                <option value="name_desc">{t("Name Z–A")}</option>
+                <option value="price_asc">{t("Price Low–High")}</option>
+                <option value="price_desc">{t("Price High–Low")}</option>
               </select>
             </div>
           </div>
@@ -250,7 +242,7 @@ export default function ProductsPage() {
                   onClick={() => setCategory(undefined)}
                   className="inline-flex items-center gap-1.5 bg-brand-50 text-brand-700 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-brand-100 transition-colors"
                 >
-                  {getCategoryIcon(categorySlug)} {categories.find((c) => c.slug === categorySlug)?.name ?? categorySlug}
+                  {getCategoryIcon(categorySlug)} {t(categories.find((c) => c.slug === categorySlug)?.name ?? categorySlug)}
                   <span className="text-brand-400 font-bold ml-0.5">×</span>
                 </button>
               )}
@@ -281,7 +273,7 @@ export default function ProductsPage() {
           ) : displayProducts.length === 0 ? (
             <div className="text-center py-20 space-y-3">
               <span className="text-5xl">🔍</span>
-              <p className="text-gray-500 font-medium">No products found.</p>
+              <p className="text-gray-500 font-medium">{t("No products found.")}</p>
               {(categorySlug || debouncedSearch) && (
                 <button
                   onClick={() => { setSearchInput(''); setCategory(undefined); }}

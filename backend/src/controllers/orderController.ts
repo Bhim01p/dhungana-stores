@@ -1,11 +1,12 @@
 ﻿import { Request, Response, NextFunction } from "express";
 import { orderService } from "../services/orderService";
 import { customerService } from "../services/customerService";
+import { OrderFulfillmentType } from "@prisma/client";
 
 // POST /api/orders
 export async function createOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { customerName, phone, email, address, landmark, notes, items, paymentMethodId } = req.body as {
+    const { customerName, phone, email, address, landmark, notes, items, paymentMethodId, fulfillmentType, deliveryAreaId, deliveryDate, deliverySlotId } = req.body as {
       customerName?: string;
       phone?: string;
       email?: string;
@@ -14,6 +15,10 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
       notes?: string;
       items?: Array<{ productId: string; quantity: number }>;
       paymentMethodId?: string;
+      fulfillmentType?: OrderFulfillmentType;
+      deliveryAreaId?: string;
+      deliveryDate?: string;
+      deliverySlotId?: string;
     };
 
     let resolvedName = customerName;
@@ -32,7 +37,9 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
 
     if (!resolvedName?.trim()) { res.status(400).json({ error: "Customer name is required." }); return; }
     if (!resolvedPhone?.trim()) { res.status(400).json({ error: "Phone number is required." }); return; }
-    if (!address?.trim()) { res.status(400).json({ error: "Delivery address is required." }); return; }
+    const selectedFulfillment = fulfillmentType ?? OrderFulfillmentType.DELIVERY;
+    if (!Object.values(OrderFulfillmentType).includes(selectedFulfillment)) { res.status(400).json({ error: "Choose delivery or pickup." }); return; }
+    if (selectedFulfillment === OrderFulfillmentType.DELIVERY && !address?.trim()) { res.status(400).json({ error: "Delivery address is required." }); return; }
     if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ error: "At least one item is required." }); return;
     }
@@ -44,12 +51,16 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
       customerName: resolvedName,
       phone: resolvedPhone,
       email: resolvedEmail,
-      address,
+      address: address?.trim() || "Store pickup",
       landmark,
       notes,
       items,
       customerId,
       paymentMethodId,
+      fulfillmentType: selectedFulfillment,
+      deliveryAreaId,
+      deliveryDate,
+      deliverySlotId,
     });
     res.status(201).json(order);
   } catch (err) { next(err); }
@@ -72,6 +83,10 @@ export async function getGuestOrder(req: Request, res: Response, next: NextFunct
       paymentMethodQrImageUrl: order.paymentMethodQrImageUrl,
       paymentMethodAccountInfo: order.paymentMethodAccountInfo,
       address: order.address,
+      fulfillmentType: order.fulfillmentType,
+      deliveryDate: order.deliveryDate,
+      deliveryArea: order.deliveryArea,
+      deliverySlot: order.deliverySlot,
       landmark: order.landmark,
       subtotal: order.subtotal,
       deliveryCharge: order.deliveryCharge,

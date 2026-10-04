@@ -57,6 +57,7 @@ app.use('/api/auth/forgot-password', rateLimit(5, 60 * 60 * 1000));
 app.use('/api/customers/login', rateLimit(10, 15 * 60 * 1000));
 app.use('/api/customers/signup', rateLimit(10, 60 * 60 * 1000));
 app.use('/api/customers/forgot-password', rateLimit(5, 60 * 60 * 1000));
+app.use('/api/contact', rateLimit(5, 15 * 60 * 1000));
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // ROUTES

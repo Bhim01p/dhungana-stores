@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_STAFF_URL?: string;
+  readonly VITE_SITE_URL?: string;
 }
 
 interface ImportMeta {

@@ -7,6 +7,8 @@ import adminRoutes          from "./adminRoutes";
 import orderRoutes          from "./orderRoutes";
 import paymentMethodRoutes  from "./paymentMethodRoutes";
 import customerRoutes       from "./customerRoutes";
+import supportRoutes        from "./supportRoutes";
+import fulfillmentRoutes    from "./fulfillmentRoutes";
 
 const router = Router();
 
@@ -16,9 +18,11 @@ router.use("/categories",      categoryRoutes);
 router.use("/products",        productRoutes);
 router.use("/orders",          orderRoutes);
 router.use("/payment-methods", paymentMethodRoutes);
+router.use("/fulfillment",     fulfillmentRoutes);
 
 // Customer auth + profile
 router.use("/customers",       customerRoutes);
+router.use("/contact",         supportRoutes);
 
 // Admin auth
 router.use("/auth",            authRoutes);

@@ -6,6 +6,15 @@ export type Unit = "kg" | "gram" | "litre" | "ml" | "packet" | "box" | "piece" |
 export type AdminRole = "ADMIN" | "STAFF";
 export type OrderStatus = "PENDING" | "CONFIRMED" | "PREPARING" | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELLED";
 export type PaymentStatus = "PENDING" | "CONFIRMED" | "NOT_REQUIRED" | "REFUNDED";
+export type OrderFulfillment = "DELIVERY" | "PICKUP";
+
+export interface DeliveryArea {
+  id: string; name: string; deliveryCharge: string; freeDeliveryThreshold: string; active: boolean; sortOrder: number;
+}
+
+export interface DeliverySlot {
+  id: string; label: string; startTime: string; endTime: string; weekdays: number[]; active: boolean; sortOrder: number;
+}
 
 export interface Category {
   id: string; name: string; slug: string;
@@ -21,7 +30,9 @@ export interface Product {
   id: string; name: string; slug: string;
   description: string | null; brand: string | null; sku: string | null;
   price: string; unit: Unit; stockQuantity: number; lowStockThreshold: number;
-  image: string | null; active: boolean; featured: boolean;
+  supplierName?: string | null; expiresAt?: string | null;
+  image: string | null; images?: string[]; active: boolean; featured: boolean;
+  substitutes?: Product[];
   categoryId: string; category: {
     id: string; name: string; slug: string; parentId?: string | null;
     parent?: { id: string; name: string; slug: string } | null;
@@ -51,7 +62,7 @@ export interface PaymentMethod {
 }
 
 export interface OrderItem {
-  id: string; productName: string; unit: Unit;
+  id: string; productId?: string | null; productName: string; unit: Unit;
   quantity: number; unitPrice: string; subtotal: string; createdAt: string;
 }
 
@@ -65,6 +76,8 @@ export interface Order {
   paymentMethodAccountInfo?: string | null;
   paymentStatus: PaymentStatus; orderStatus: OrderStatus;
   createdAt: string; updatedAt: string;
+  fulfillmentType?: OrderFulfillment; deliveryAreaId?: string | null; deliveryDate?: string | null; deliverySlotId?: string | null;
+  deliveryArea?: { name: string } | null; deliverySlot?: { label: string } | null;
   orderItems?: OrderItem[];
   guestLookupToken?: string;
 }
@@ -74,6 +87,10 @@ export interface CreateOrderPayload {
   phone?: string;
   email?: string;
   paymentMethodId?: string;
+  fulfillmentType?: OrderFulfillment;
+  deliveryAreaId?: string;
+  deliveryDate?: string;
+  deliverySlotId?: string;
   address: string;
   landmark?: string;
   notes?: string;
@@ -106,7 +123,7 @@ export interface PaginatedResponse<T> {
 
 export interface AuthResponse {
   token: string;
-  admin: { id: string; username: string; role: AdminRole };
+  admin: { id: string; username: string; role: AdminRole; imageUrl?: string | null };
 }
 
 export interface CustomerUser {
@@ -114,6 +131,7 @@ export interface CustomerUser {
   name: string;
   email: string;
   phone: string;
+  imageUrl?: string | null;
   createdAt?: string;
 }
 

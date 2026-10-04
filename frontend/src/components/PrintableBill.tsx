@@ -1,4 +1,6 @@
 import type { Order } from "../types";
+import { createPortal } from "react-dom";
+import BrandLogo from "./BrandLogo";
 
 interface Props {
   order: Order;
@@ -17,12 +19,12 @@ export default function PrintableBill({ order }: Props) {
   const noteLines = order.notes ? Math.max(1, Math.ceil(order.notes.length / 34)) : 0;
   const receiptHeightMm = Math.min(900, Math.max(130, 98 + itemLines * 8 + (order.orderItems?.length ?? 0) * 3 + addressLines * 4 + noteLines * 4));
 
-  return (
+  return createPortal(
     <>
     <style>{`@page { size: 80mm ${receiptHeightMm}mm; margin: 3mm; }`}</style>
     <article className="print-bill" aria-label={`Bill for order ${order.orderNumber}`}>
       <header className="bill-header">
-        <p className="bill-store-name">Bishnu and Dhungana Stores</p>
+        <BrandLogo className="bill-logo" alt="" />
         <p className="bill-title">Order Bill</p>
       </header>
       <section className="bill-meta">
@@ -60,6 +62,7 @@ export default function PrintableBill({ order }: Props) {
       {order.notes && <p className="bill-notes"><strong>Note:</strong> {order.notes}</p>}
       <footer className="bill-footer">Thank you for shopping with us.</footer>
     </article>
-    </>
+    </>,
+    document.body,
   );
 }

@@ -33,6 +33,8 @@ export const adminOrderService = {
         skip,
         take: limit,
         include: {
+          deliveryArea: { select: { name: true } },
+          deliverySlot: { select: { label: true } },
           orderItems: {
             select: {
               id: true,
@@ -57,13 +59,13 @@ export const adminOrderService = {
   async getOne(id: string) {
     return prisma.order.findUnique({
       where: { id },
-      include: { orderItems: true },
+      include: { orderItems: true, deliveryArea: { select: { name: true } }, deliverySlot: { select: { label: true } } },
     });
   },
 
-  async updateStatus(id: string, orderStatus: OrderStatus) {
+  async updateStatus(id: string, orderStatus: OrderStatus, actorId?: string) {
     return prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({ where: { id }, include: { orderItems: true } });
+      const order = await tx.order.findUnique({ where: { id }, include: { orderItems: true, deliveryArea: { select: { name: true } }, deliverySlot: { select: { label: true } } } });
       if (!order) throw Object.assign(new Error('Order not found.'), { statusCode: 404 });
       if (order.orderStatus === OrderStatus.CANCELLED && orderStatus !== OrderStatus.CANCELLED) {
         throw Object.assign(new Error('Cancelled orders cannot be reopened. Create a new order instead.'), { statusCode: 400 });
@@ -78,22 +80,43 @@ export const adminOrderService = {
         if (order.paymentStatus === PaymentStatus.CONFIRMED) {
           throw Object.assign(new Error('This order is marked paid. Process the refund and mark payment as Refunded before cancelling it.'), { statusCode: 400 });
         }
+        const claimed = await tx.order.updateMany({
+          where: { id, orderStatus: order.orderStatus, stockReserved: order.stockReserved },
+          data: { orderStatus, stockReserved: false },
+        });
+        if (claimed.count !== 1) throw Object.assign(new Error('This order changed while you were updating it. Refresh and try again.'), { statusCode: 409 });
         if (order.stockReserved) {
           for (const item of order.orderItems) {
-            if (item.productId) await tx.product.update({ where: { id: item.productId }, data: { stockQuantity: { increment: item.quantity } } });
+            if (item.productId) {
+              const product = await tx.product.update({ where: { id: item.productId }, data: { stockQuantity: { increment: item.quantity } } });
+              await tx.inventoryMovement.create({ data: {
+                productId: item.productId, productName: item.productName, type: 'ONLINE_CANCELLED',
+                quantityChange: item.quantity, stockAfter: product.stockQuantity,
+                reference: order.orderNumber, reason: 'Inventory returned after order cancellation.', actorId: actorId ?? null,
+              } });
+            }
           }
         }
-        return tx.order.update({ where: { id }, data: { orderStatus, stockReserved: false } });
+        await tx.adminAuditLog.create({ data: { actorId: actorId ?? null, action: 'CANCELLED', entity: 'ORDER', entityId: id, summary: `Order ${order.orderNumber} was cancelled${order.stockReserved ? ' and reserved stock was returned' : ''}.` } });
+        return tx.order.findUniqueOrThrow({
+          where: { id },
+          include: { orderItems: true, deliveryArea: { select: { name: true } }, deliverySlot: { select: { label: true } } },
+        });
       }
-      return tx.order.update({ where: { id }, data: { orderStatus } });
+      const updated = await tx.order.update({ where: { id }, data: { orderStatus } });
+      await tx.adminAuditLog.create({ data: { actorId: actorId ?? null, action: 'STATUS_CHANGED', entity: 'ORDER', entityId: id, summary: `Order ${order.orderNumber} moved from ${order.orderStatus} to ${orderStatus}.`, metadata: { from: order.orderStatus, to: orderStatus } } });
+      return updated;
     });
   },
 
-  async updatePaymentStatus(id: string, paymentStatus: PaymentStatus) {
+  async updatePaymentStatus(id: string, paymentStatus: PaymentStatus, actorId?: string) {
     return prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id } });
       if (!order) throw Object.assign(new Error('Order not found.'), { statusCode: 404 });
       if (order.paymentStatus === paymentStatus) return order;
+      if (order.orderStatus === OrderStatus.CANCELLED && paymentStatus !== PaymentStatus.REFUNDED) {
+        throw Object.assign(new Error('Cancelled orders cannot be marked as paid. Record a refund if a payment was returned.'), { statusCode: 400 });
+      }
       const allowed: Record<PaymentStatus, PaymentStatus[]> = {
         [PaymentStatus.PENDING]: [PaymentStatus.CONFIRMED, PaymentStatus.NOT_REQUIRED],
         [PaymentStatus.CONFIRMED]: [PaymentStatus.REFUNDED],
@@ -103,7 +126,9 @@ export const adminOrderService = {
       if (!allowed[order.paymentStatus].includes(paymentStatus)) {
         throw Object.assign(new Error(`Payment status cannot change from ${order.paymentStatus} to ${paymentStatus}.`), { statusCode: 400 });
       }
-      return tx.order.update({ where: { id }, data: { paymentStatus } });
+      const updated = await tx.order.update({ where: { id }, data: { paymentStatus } });
+      await tx.adminAuditLog.create({ data: { actorId: actorId ?? null, action: 'PAYMENT_CHANGED', entity: 'ORDER', entityId: id, summary: `Payment for order ${order.orderNumber} moved from ${order.paymentStatus} to ${paymentStatus}.`, metadata: { from: order.paymentStatus, to: paymentStatus } } });
+      return updated;
     });
   },
 };

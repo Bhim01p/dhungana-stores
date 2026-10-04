@@ -55,7 +55,7 @@ export async function verifyLoginCode(req: Request, res: Response, next: NextFun
       return;
     }
     const token = signToken({ sub: admin.id, username: admin.username, role: admin.role });
-    res.status(200).json({ token, admin: { id: admin.id, username: admin.username, role: admin.role } });
+    res.status(200).json({ token, admin: { id: admin.id, username: admin.username, role: admin.role, permissions: admin.permissions, imageUrl: admin.imageUrl } });
   } catch (err) { next(err); }
 }
 
@@ -64,7 +64,7 @@ export async function me(req: Request, res: Response, next: NextFunction): Promi
   try {
     const admin = await prisma.adminUser.findUnique({
       where: { id: req.admin!.sub },
-      select: { id: true, username: true, recoveryEmail: true, role: true, active: true, createdAt: true },
+      select: { id: true, username: true, recoveryEmail: true, imageUrl: true, role: true, permissions: true, active: true, createdAt: true },
     });
 
     if (!admin) {
@@ -76,6 +76,32 @@ export async function me(req: Request, res: Response, next: NextFunction): Promi
   } catch (err) {
     next(err);
   }
+}
+
+export async function updateProfilePhoto(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const imageUrl = (req.body as { imageUrl?: string | null }).imageUrl;
+    if (imageUrl !== null && typeof imageUrl !== 'string') {
+      res.status(400).json({ error: 'A profile photo URL is required.' });
+      return;
+    }
+    if (imageUrl) {
+      let parsed: URL;
+      try { parsed = new URL(imageUrl); } catch { res.status(400).json({ error: 'Profile photo URL is invalid.' }); return; }
+      if (parsed.protocol !== 'https:' || parsed.hostname !== 'res.cloudinary.com') {
+        res.status(400).json({ error: 'Profile photos must be uploaded through the account photo uploader.' });
+        return;
+      }
+    }
+    const admin = await prisma.adminUser.update({
+      where: { id: req.admin!.sub },
+      data: { imageUrl },
+      select: { id: true, username: true, recoveryEmail: true, imageUrl: true, role: true },
+    });
+    await prisma.adminAuditLog.create({ data: { actorId: admin.id, action: 'PROFILE_PHOTO_CHANGED', entity: 'ADMIN_USER', entityId: admin.id, summary: `Profile photo updated for ${admin.username}.` } });
+    const token = signToken({ sub: admin.id, username: admin.username, role: admin.role });
+    res.status(200).json({ ...admin, token });
+  } catch (err) { next(err); }
 }
 
 // PATCH /api/auth/password
@@ -95,6 +121,10 @@ export async function changePassword(req: Request, res: Response, next: NextFunc
       res.status(401).json({ error: 'Admin account is inactive or no longer exists.' });
       return;
     }
+    if (admin.role !== 'ADMIN') {
+      res.status(403).json({ error: 'Staff passwords can only be changed by the main admin.' });
+      return;
+    }
     if (!(await verifyPassword(currentPassword, admin.password))) {
       res.status(400).json({ error: 'Current password is incorrect.' });
       return;
@@ -103,6 +133,7 @@ export async function changePassword(req: Request, res: Response, next: NextFunc
       where: { id: admin.id },
       data: { password: await hashPassword(newPassword) },
     });
+    await prisma.adminAuditLog.create({ data: { actorId: admin.id, action: 'PASSWORD_CHANGED', entity: 'ADMIN_USER', entityId: admin.id, summary: `Password changed for ${admin.username}.` } });
     res.status(200).json({ message: 'Password updated. Sign in again with your new password.' });
   } catch (err) { next(err); }
 }
@@ -119,6 +150,7 @@ export async function updateRecoveryEmail(req: Request, res: Response, next: Nex
       return;
     }
     const admin = await prisma.adminUser.update({ where: { id: req.admin!.sub }, data: { recoveryEmail: email }, select: { id: true, username: true, recoveryEmail: true, role: true } });
+    await prisma.adminAuditLog.create({ data: { actorId: admin.id, action: 'RECOVERY_EMAIL_CHANGED', entity: 'ADMIN_USER', entityId: admin.id, summary: `Recovery email updated for ${admin.username}.` } });
     res.status(200).json(admin);
   } catch (err) { next(err); }
 }

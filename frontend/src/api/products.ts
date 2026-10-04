@@ -28,4 +28,9 @@ export const productsApi = {
 
   getOne: (idOrSlug: string) =>
     apiClient.get<Product>(`/products/${idOrSlug}`),
+
+  getByIds: (ids: string[]) => {
+    const query = new URLSearchParams({ ids: ids.slice(0, 50).join(","), limit: "50" });
+    return apiClient.get<PaginatedResponse<Product>>(`/products?${query.toString()}`);
+  },
 };

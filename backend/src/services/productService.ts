@@ -17,7 +17,10 @@ export interface CreateProductInput {
   unit: Unit;
   stockQuantity?: number;
   lowStockThreshold?: number;
+  supplierName?: string;
+  expiresAt?: string | null;
   image?: string;
+  images?: string[];
   active?: boolean;
   featured?: boolean;
 }
@@ -32,12 +35,16 @@ export interface UpdateProductInput {
   unit?: Unit;
   stockQuantity?: number;
   lowStockThreshold?: number;
+  supplierName?: string | null;
+  expiresAt?: string | null;
   image?: string;
+  images?: string[];
   active?: boolean;
   featured?: boolean;
 }
 
 export interface ProductFilters {
+  ids?: string[];
   publicOnly?: boolean;
   categoryId?: string;
   categorySlug?: string;
@@ -72,6 +79,7 @@ export const productService = {
     const {
       categoryId,
       categorySlug,
+      ids,
       publicOnly,
       active,
       featured,
@@ -91,6 +99,7 @@ export const productService = {
 
     if (active !== undefined) where.active = active;
     if (featured !== undefined) where.featured = featured;
+    if (ids?.length) where.id = { in: ids.slice(0, 50) };
 
     if (publicOnly) {
       and.push({ category: { active: true, OR: [{ parentId: null }, { parent: { active: true } }] } });
@@ -147,7 +156,7 @@ export const productService = {
     ]);
 
     return {
-      data: products,
+      data: publicOnly ? products.map(({ supplierName: _supplierName, expiresAt: _expiresAt, ...product }) => product) : products,
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   },
@@ -155,8 +164,8 @@ export const productService = {
   /**
    * Get a single product by id or slug.
    */
-  async getOne(idOrSlug: string) {
-    return prisma.product.findFirst({
+  async getOne(idOrSlug: string, publicOnly = false) {
+    const product = await prisma.product.findFirst({
       where: {
         OR: [{ id: idOrSlug }, { slug: idOrSlug }],
       },
@@ -169,19 +178,32 @@ export const productService = {
         },
       },
     });
+    if (!product || !publicOnly) return product;
+    const { supplierName: _supplierName, expiresAt: _expiresAt, ...publicProduct } = product;
+    const substitutes = product.stockQuantity > 0 ? [] : await prisma.product.findMany({
+      where: {
+        id: { not: product.id }, categoryId: product.categoryId, active: true, stockQuantity: { gt: 0 },
+        category: { active: true, OR: [{ parentId: null }, { parent: { active: true } }] },
+      },
+      orderBy: [{ featured: 'desc' }, { name: 'asc' }], take: 6,
+      include: { category: { select: { id: true, name: true, slug: true, parentId: true, parent: { select: { id: true, name: true, slug: true } } } } },
+    });
+    return { ...publicProduct, substitutes };
   },
 
   /**
    * Create a new product.
    */
-  async create(input: CreateProductInput) {
+  async create(input: CreateProductInput, actorId?: string) {
     assertNonNegative(input.price, 'Price');
     assertNonNegative(input.stockQuantity, 'Stock quantity');
     assertNonNegative(input.lowStockThreshold, 'Low stock threshold');
 
     const slug = slugify(input.name);
 
-    return prisma.product.create({
+    const images = normalizeProductImages(input.images ?? (input.image ? [input.image] : []));
+    return prisma.$transaction(async (tx) => {
+    const product = await tx.product.create({
       data: {
         name: input.name.trim(),
         slug,
@@ -193,7 +215,10 @@ export const productService = {
         unit: input.unit,
         stockQuantity: input.stockQuantity ?? 0,
         lowStockThreshold: input.lowStockThreshold ?? 10,
-        image: input.image?.trim(),
+        supplierName: input.supplierName?.trim() || null,
+        expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+        image: images[0] ?? input.image?.trim() ?? null,
+        images,
         active: input.active ?? true,
         featured: input.featured ?? false,
       },
@@ -206,12 +231,20 @@ export const productService = {
         },
       },
     });
+    if (product.stockQuantity > 0) await tx.inventoryMovement.create({ data: {
+      productId: product.id, productName: product.name, type: 'INITIAL_STOCK',
+      quantityChange: product.stockQuantity, stockAfter: product.stockQuantity,
+      reason: 'Opening stock entered when product was created.', actorId: actorId ?? null,
+    } });
+    if (actorId) await tx.adminAuditLog.create({ data: { actorId, action: 'PRODUCT_CREATED', entity: 'PRODUCT', entityId: product.id, summary: `Product ${product.name} was created.` } });
+    return product;
+    });
   },
 
   /**
    * Update an existing product by id.
    */
-  async update(id: string, input: UpdateProductInput) {
+  async update(id: string, input: UpdateProductInput, actorId?: string) {
     assertNonNegative(input.price, 'Price');
     assertNonNegative(input.stockQuantity, 'Stock quantity');
     assertNonNegative(input.lowStockThreshold, 'Low stock threshold');
@@ -231,21 +264,36 @@ export const productService = {
     if (input.unit !== undefined) data.unit = input.unit;
     if (input.stockQuantity !== undefined) data.stockQuantity = input.stockQuantity;
     if (input.lowStockThreshold !== undefined) data.lowStockThreshold = input.lowStockThreshold;
-    if (input.image !== undefined) data.image = input.image.trim();
+    if (input.supplierName !== undefined) data.supplierName = input.supplierName?.trim() || null;
+    if (input.expiresAt !== undefined) data.expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
+    if (input.images !== undefined) {
+      const images = normalizeProductImages(input.images);
+      data.images = images;
+      data.image = images[0] ?? null;
+    } else if (input.image !== undefined) {
+      const image = input.image.trim();
+      data.image = image || null;
+      data.images = image ? [image] : [];
+    }
     if (input.active !== undefined) data.active = input.active;
     if (input.featured !== undefined) data.featured = input.featured;
 
-    return prisma.product.update({
-      where: { id },
-      data,
-      include: {
-        category: {
-          select: {
-            id: true, name: true, slug: true, parentId: true,
-            parent: { select: { id: true, name: true, slug: true } },
-          },
-        },
-      },
+    return prisma.$transaction(async (tx) => {
+      const current = await tx.product.findUnique({ where: { id } });
+      if (!current) throw Object.assign(new Error('Product not found.'), { statusCode: 404 });
+      const product = await tx.product.update({
+        where: { id }, data,
+        include: { category: { select: { id: true, name: true, slug: true, parentId: true, parent: { select: { id: true, name: true, slug: true } } } } },
+      });
+      if (input.stockQuantity !== undefined && input.stockQuantity !== current.stockQuantity) {
+        await tx.inventoryMovement.create({ data: {
+          productId: id, productName: product.name, type: 'ADJUSTMENT',
+          quantityChange: input.stockQuantity - current.stockQuantity, stockAfter: input.stockQuantity,
+          reason: 'Stock quantity changed from the product editor.', actorId: actorId ?? null,
+        } });
+      }
+      if (actorId) await tx.adminAuditLog.create({ data: { actorId, action: 'PRODUCT_UPDATED', entity: 'PRODUCT', entityId: id, summary: `Product ${product.name} was updated.` } });
+      return product;
     });
   },
 
@@ -261,3 +309,7 @@ export const productService = {
     return prisma.product.delete({ where: { id } });
   },
 };
+
+function normalizeProductImages(images: string[]): string[] {
+  return images.map((url) => url.trim()).filter(Boolean).slice(0, 8);
+}

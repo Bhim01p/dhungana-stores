@@ -1,10 +1,13 @@
 ﻿import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
+import { readApiResponse } from "../api/readResponse";
+
 export interface CustomerUser {
   id: string;
   name: string;
   email: string;
   phone: string;
+  imageUrl?: string | null;
 }
 
 interface CustomerAuthContextType {
@@ -14,6 +17,7 @@ interface CustomerAuthContextType {
   customerLogin: (email: string, password: string) => Promise<void>;
   customerSignup: (name: string, email: string, phone: string, password: string) => Promise<void>;
   customerLogout: () => void;
+  syncCustomer: (updates: Partial<CustomerUser>) => void;
   customerError: string | null;
   clearCustomerError: () => void;
 }
@@ -35,8 +39,12 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(USER_KEY);
       const t = sessionStorage.getItem(TOKEN_KEY);
       const u = sessionStorage.getItem(USER_KEY);
-      if (t && u) { setCustomerToken(t); setCustomer(JSON.parse(u)); }
-    } catch { /* ignore */ }
+      if (t && u) {
+        const parsed = JSON.parse(u) as CustomerUser;
+        if (!parsed || typeof parsed.id !== "string" || typeof parsed.name !== "string") throw new Error("Invalid saved session");
+        setCustomerToken(t); setCustomer(parsed);
+      }
+    } catch { sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(USER_KEY); }
     setIsCustomerLoading(false);
   }, []);
 
@@ -54,8 +62,9 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-    const data = await res.json();
-    if (!res.ok) { const e = new Error(data.error || "Login failed"); setCustomerError(e.message); throw e; }
+    let data: { token: string; customer: CustomerUser };
+    try { data = await readApiResponse<{ token: string; customer: CustomerUser }>(res, "/customers/login"); }
+    catch (error) { const e = error as Error; setCustomerError(e.message); throw e; }
     persist(data.token, data.customer);
   };
 
@@ -66,8 +75,9 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, email, phone, password }),
     });
-    const data = await res.json();
-    if (!res.ok) { const e = new Error(data.error || "Signup failed"); setCustomerError(e.message); throw e; }
+    let data: { token: string; customer: CustomerUser };
+    try { data = await readApiResponse<{ token: string; customer: CustomerUser }>(res, "/customers/signup"); }
+    catch (error) { const e = error as Error; setCustomerError(e.message); throw e; }
     persist(data.token, data.customer);
   };
 
@@ -78,10 +88,19 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
     setCustomer(null);
   };
 
+  const syncCustomer = (updates: Partial<CustomerUser>) => {
+    setCustomer(current => {
+      if (!current) return current;
+      const updated = { ...current, ...updates };
+      sessionStorage.setItem(USER_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
     <CustomerAuthContext.Provider value={{
       customer, customerToken, isCustomerLoading,
-      customerLogin, customerSignup, customerLogout,
+      customerLogin, customerSignup, customerLogout, syncCustomer,
       customerError, clearCustomerError: () => setCustomerError(null),
     }}>
       {children}

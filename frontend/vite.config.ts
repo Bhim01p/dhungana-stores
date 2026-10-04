@@ -16,7 +16,7 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             'http-equiv': 'Content-Security-Policy',
-            content: "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; connect-src 'self'",
+            content: "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; connect-src 'self' https://api.cloudinary.com",
           },
           injectTo: 'head' as const,
         }];

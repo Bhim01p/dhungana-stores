@@ -7,6 +7,7 @@ import ErrorMessage from "../components/ErrorMessage";
 import { Unit } from "../types";
 import type { Product } from "../types";
 import ProductImage from "../components/ProductImage";
+import AdminImageUpload from "../components/AdminImageUpload";
 import { useDebounce } from "../hooks/useDebounce";
 
 const LIMIT = 10;
@@ -26,13 +27,12 @@ export default function AdminProductsPage() {
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("active");
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [missingImageOnly, setMissingImageOnly] = useState(false);
-  const [totalCount, setTotalCount] = useState(0);
   const debouncedSearch = useDebounce(search, 300);
 
   const [formData, setFormData] = useState({
     name: "", description: "", categoryId: "", brand: "", sku: "",
-    price: "", unit: "kg" as Unit, stockQuantity: 0, lowStockThreshold: 10,
-    image: "", active: true, featured: false,
+    price: "", unit: "kg" as Unit, stockQuantity: 0, lowStockThreshold: 10, supplierName: "", expiresAt: "",
+    images: [] as string[], active: true, featured: false,
   });
 
   const fetchProducts = useCallback(async () => {
@@ -49,7 +49,6 @@ export default function AdminProductsPage() {
       });
       setProducts(res.data);
       setTotalPages(res.meta.totalPages);
-      setTotalCount(res.meta.total);
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   }, [token, page, debouncedSearch, categoryId, activeFilter, lowStockOnly, missingImageOnly]);
 
@@ -66,8 +65,8 @@ export default function AdminProductsPage() {
   const resetForm = () => {
     setFormData({
       name: "", description: "", categoryId: categories[0]?.id ?? "", brand: "", sku: "",
-      price: "", unit: "kg", stockQuantity: 0, lowStockThreshold: 10,
-      image: "", active: true, featured: false,
+      price: "", unit: "kg", stockQuantity: 0, lowStockThreshold: 10, supplierName: "", expiresAt: "",
+      images: [], active: true, featured: false,
     });
     setEditing(null); setShowForm(false);
   };
@@ -79,7 +78,9 @@ export default function AdminProductsPage() {
       categoryId: product.categoryId, brand: product.brand ?? "",
       sku: product.sku ?? "", price: product.price, unit: product.unit,
       stockQuantity: product.stockQuantity, lowStockThreshold: product.lowStockThreshold,
-      image: product.image ?? "", active: product.active, featured: product.featured,
+      supplierName: product.supplierName ?? "", expiresAt: product.expiresAt ? new Date(product.expiresAt).toISOString().slice(0, 10) : "",
+      images: (Array.isArray(product.images) && product.images.length ? product.images : product.image ? [product.image] : []).slice(0, 8),
+      active: product.active, featured: product.featured,
     });
     setShowForm(true);
   };
@@ -91,7 +92,8 @@ export default function AdminProductsPage() {
     setError(null);
     try {
       if (editing) {
-        await adminProductsApi.update(token, editing.id, formData);
+        const { stockQuantity: _inventoryHandledSeparately, ...productFields } = formData;
+        await adminProductsApi.update(token, editing.id, productFields);
       } else {
         await adminProductsApi.create(token, {
           ...formData,
@@ -131,10 +133,8 @@ export default function AdminProductsPage() {
     <div className="p-4 md:p-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">Inventory</p>
           <h1 className="text-2xl font-bold text-gray-900">Products</h1>
-          <p className="text-gray-500 mt-0.5">{totalCount} matching products</p>
-          <p className="mt-1 text-xs text-gray-400">Deactivate a product first. Archived products can be permanently deleted.</p>
+          <p className="text-gray-500 mt-0.5">Manage products, pricing, and availability.</p>
         </div>
         <button onClick={() => { resetForm(); setShowForm(true); }} className="btn-primary">
           + Add Product
@@ -170,9 +170,14 @@ export default function AdminProductsPage() {
 
       {/* Form */}
       {showForm && (
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-lg font-bold mb-4">{editing ? "Edit Product" : "Add New Product"}</h2>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/50 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="product-form-title">
+          <div className="my-auto max-h-[94vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-7">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <h2 id="product-form-title" className="text-lg font-bold">{editing ? "Edit Product" : "Add New Product"}</h2>
+            <button type="button" onClick={resetForm} className="rounded-lg p-2 text-2xl leading-none text-gray-500 hover:bg-gray-100" aria-label="Close product form">×</button>
+          </div>
+          {error && <div className="mb-4"><ErrorMessage message={error} /></div>}
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
 
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
@@ -234,8 +239,9 @@ export default function AdminProductsPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity</label>
-              <input type="number" min="0" className="input" value={formData.stockQuantity}
+              <input type="number" min="0" className="input" value={formData.stockQuantity} disabled={!!editing}
                 onChange={e => setFormData({ ...formData, stockQuantity: Number(e.target.value) })} />
+              {editing && <p className="mt-1 text-xs text-gray-500">Use Inventory to receive stock or record a correction, so the change is logged safely.</p>}
             </div>
 
             <div>
@@ -244,17 +250,42 @@ export default function AdminProductsPage() {
                 onChange={e => setFormData({ ...formData, lowStockThreshold: Number(e.target.value) })} />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Supplier (optional)</label>
+              <input className="input" maxLength={120} value={formData.supplierName} onChange={e => setFormData({ ...formData, supplierName: e.target.value })} placeholder="Supplier or wholesaler" />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Expiry date (optional)</label>
+              <input type="date" className="input" value={formData.expiresAt} onChange={e => setFormData({ ...formData, expiresAt: e.target.value })} />
+            </div>
+
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Product photo link</label>
-              <input type="url" className="input" placeholder="Paste a public image URL"
-                value={formData.image}
-                onChange={e => setFormData({ ...formData, image: e.target.value })} />
-              <div className="mt-3 flex items-center gap-3">
-                <div className="h-20 w-20 overflow-hidden rounded-lg border border-gray-200">
-                  <ProductImage src={formData.image || null} name={formData.name || "Product preview"} categoryName={categories.find(cat => cat.id === formData.categoryId)?.name} categorySlug={categories.find(cat => cat.id === formData.categoryId)?.slug} />
-                </div>
-                <p className="max-w-md text-xs leading-relaxed text-gray-500">Use a public, direct image link. If you leave this empty, the store uses a matching category illustration.</p>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="block text-sm font-medium text-gray-700">Product photos</label>
+                <span className="text-xs font-semibold text-gray-500">{formData.images.filter(url => url.trim()).length} / 8</span>
               </div>
+              <p className="mb-3 text-xs leading-relaxed text-gray-500">The first photo is the main product image. Add direct image links or upload photos from your device.</p>
+              <div className="space-y-3">
+                {formData.images.map((imageUrl, index) => (
+                  <div key={index} className="flex items-center gap-3 rounded-xl border border-gray-200 p-2.5">
+                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                      <ProductImage src={imageUrl || null} name={formData.name || "Product preview"} categoryName={categories.find(cat => cat.id === formData.categoryId)?.name} categorySlug={categories.find(cat => cat.id === formData.categoryId)?.slug} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {index === 0 && <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-brand-700">Main photo</span>}
+                      <input type="url" className="input" placeholder="Paste a direct image URL" value={imageUrl}
+                        onChange={event => setFormData(current => ({ ...current, images: current.images.map((url, i) => i === index ? event.target.value : url) }))} />
+                    </div>
+                    <button type="button" onClick={() => setFormData(current => ({ ...current, images: current.images.filter((_, i) => i !== index) }))} className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" aria-label={`Remove photo ${index + 1}`}>Remove</button>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {token && formData.images.length < 8 && <AdminImageUpload token={token} assetType="product" multiple maxFiles={8 - formData.images.length} onUploaded={image => setFormData(current => current.images.length < 8 ? { ...current, images: [...current.images, image] } : current)} />}
+                {formData.images.length < 8 && <button type="button" onClick={() => setFormData(current => ({ ...current, images: [...current.images, ""] }))} className="btn-secondary">+ Add image link</button>}
+              </div>
+              <p className="mt-2 text-xs text-gray-500">Up to 8 photos. JPG, PNG, WebP, AVIF, and HEIC uploads up to 5 MB each.</p>
             </div>
 
             <div className="md:col-span-2 flex items-center gap-6">
@@ -275,54 +306,35 @@ export default function AdminProductsPage() {
               <button type="button" onClick={resetForm} className="btn-secondary">Cancel</button>
             </div>
           </form>
+          </div>
         </div>
       )}
 
-      {/* Table */}
+      {/* Compact list; full product information stays in the edit form. */}
       {products.length > 0 ? (
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-600 uppercase font-medium text-xs">
-                <tr>
-                  <th className="px-4 py-3">Product</th>
-                  <th className="px-6 py-3">Category</th>
-                  <th className="px-6 py-3 text-right">Price</th>
-                  <th className="px-6 py-3 text-center">Stock</th>
-                  <th className="px-6 py-3 text-center">Status</th>
-                  <th className="px-6 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {products.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-gray-100"><ProductImage src={p.image} name={p.name} categoryName={p.category?.name} categorySlug={p.category?.slug} /></div>
-                        <div className="min-w-0"><p className="truncate font-semibold text-gray-900">{p.name}</p><p className="truncate text-xs text-gray-500">{p.sku || p.brand || "No SKU or brand"}</p></div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-3 text-gray-500">{p.category?.name ?? "—"}</td>
-                    <td className="px-6 py-3 text-right font-semibold text-brand-600">
-                      NPR {Number(p.price).toLocaleString("en-NP")}
-                    </td>
-                    <td className="px-6 py-3 text-center">
-                      <span className={`text-xs font-bold ${
-                        p.stockQuantity === 0 ? "text-red-600" :
-                        p.stockQuantity <= p.lowStockThreshold ? "text-yellow-600" : "text-green-600"
-                      }`}>{p.stockQuantity}</span>
-                    </td>
-                    <td className="px-6 py-3 text-center">{p.active ? <span className="badge badge-green">Active</span> : <span className="badge bg-gray-100 text-gray-600">Archived</span>}</td>
-                    <td className="px-6 py-3 text-right space-x-3">
-                      <button onClick={() => handleEdit(p)} className="text-blue-500 hover:text-blue-700 text-sm font-medium">Edit</button>
-                      <button onClick={() => handleToggleActive(p)} className={p.active ? "text-red-500 hover:text-red-700 text-sm font-medium" : "text-green-700 hover:text-green-900 text-sm font-medium"}>{p.active ? "Deactivate" : "Activate"}</button>
-                      {!p.active && <button onClick={() => void handleDelete(p)} className="text-red-700 hover:text-red-900 text-sm font-semibold">Delete</button>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="card divide-y divide-gray-100 overflow-hidden">
+          {products.map((p) => (
+            <article key={p.id} className="grid grid-cols-2 items-center gap-x-4 gap-y-3 p-4 transition-colors hover:bg-gray-50 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-6">
+              <div className="col-span-2 flex min-w-0 items-center gap-3 sm:col-span-1">
+                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-gray-100 bg-gray-50"><ProductImage src={p.image} name={p.name} categoryName={p.category?.name} categorySlug={p.category?.slug} /></div>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-gray-900">{p.name}</p>
+                  <p className="truncate text-xs text-gray-500">{p.category?.name ?? "Uncategorized"}{!p.active && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600">Archived</span>}</p>
+                </div>
+              </div>
+              <div className="text-sm sm:text-right">
+                <p className="font-semibold text-brand-600">NPR {Number(p.price).toLocaleString("en-NP")}</p>
+                <p className={`text-xs font-medium ${p.stockQuantity === 0 ? "text-red-600" : p.stockQuantity <= p.lowStockThreshold ? "text-yellow-700" : "text-gray-500"}`}>
+                  {p.stockQuantity === 0 ? "Out of stock" : `${p.stockQuantity} in stock`}
+                </p>
+              </div>
+              <div className="col-span-2 flex flex-wrap justify-end gap-x-4 gap-y-2 text-sm sm:col-span-1">
+                <button onClick={() => handleEdit(p)} className="font-medium text-blue-600 hover:text-blue-800">Edit</button>
+                <button onClick={() => handleToggleActive(p)} className={p.active ? "font-medium text-red-600 hover:text-red-800" : "font-medium text-green-700 hover:text-green-900"}>{p.active ? "Deactivate" : "Activate"}</button>
+                {!p.active && <button onClick={() => void handleDelete(p)} className="font-semibold text-red-700 hover:text-red-900">Delete</button>}
+              </div>
+            </article>
+          ))}
           {totalPages > 1 && (
             <div className="px-6 py-4 border-t flex items-center justify-between text-sm text-gray-500">
               <span>Page {page} of {totalPages}</span>

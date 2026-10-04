@@ -1,5 +1,6 @@
 ﻿import { apiClient } from "./client";
 import type { Order, CreateOrderPayload } from "../types";
+import { readApiResponse } from "./readResponse";
 
 const BASE_URL = "/api";
 
@@ -13,9 +14,7 @@ export const ordersApi = {
       },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to place order.");
-    return data as Order;
+    return readApiResponse<Order>(res, "/orders");
   },
 
   getByOrderNumber: (lookupToken: string) =>

@@ -1,9 +1,37 @@
+import 'dotenv/config';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient, Unit, OrderStatus, PaymentStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 
-// Use a separate Prisma instance for tests
-const prisma = new PrismaClient();
+// These model tests create and delete records. Never point them at the normal
+// app database, and require an explicit opt-in before using a remote test DB.
+const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
+const appDatabaseUrl = process.env.DATABASE_URL?.trim();
+if (process.env.NODE_ENV === 'production') {
+  throw new Error('Refusing to run database tests with NODE_ENV=production.');
+}
+if (!testDatabaseUrl) {
+  throw new Error('Set TEST_DATABASE_URL to a dedicated test database before running backend tests.');
+}
+if (appDatabaseUrl && testDatabaseUrl === appDatabaseUrl) {
+  throw new Error('TEST_DATABASE_URL must not be the same as DATABASE_URL.');
+}
+let parsedTestDatabaseUrl: URL;
+try {
+  parsedTestDatabaseUrl = new URL(testDatabaseUrl);
+} catch {
+  throw new Error('TEST_DATABASE_URL must be a valid PostgreSQL connection URL.');
+}
+if (!['postgresql:', 'postgres:'].includes(parsedTestDatabaseUrl.protocol)) {
+  throw new Error('TEST_DATABASE_URL must use the postgresql:// or postgres:// protocol.');
+}
+const testHost = parsedTestDatabaseUrl.hostname.toLowerCase();
+const isLoopback = ['localhost', '127.0.0.1', '::1'].includes(testHost);
+if (!isLoopback && process.env.ALLOW_REMOTE_TEST_DATABASE !== 'true') {
+  throw new Error('Remote database tests are disabled. Set ALLOW_REMOTE_TEST_DATABASE=true only for a dedicated test database.');
+}
+
+const prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl } } });
 
 // ─────────────────────────────────────────────
 // Helpers — generate unique values per test run

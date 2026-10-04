@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import LoadingSpinner from "../components/LoadingSpinner";
 import ErrorMessage from "../components/ErrorMessage";
 import type { PaymentMethod } from "../types";
+import AdminImageUpload from "../components/AdminImageUpload";
 
 export default function AdminPaymentMethodsPage() {
   const { token } = useAuth();
@@ -98,9 +99,8 @@ export default function AdminPaymentMethodsPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">QR Code Image URL *</label>
               <input required className="input" placeholder="https://example.com/your-qr-code.png"
                 value={formData.qrImageUrl} onChange={e => setFormData({ ...formData, qrImageUrl: e.target.value })} />
-              <p className="text-xs text-gray-400 mt-1">
-                Upload your QR image to Google Drive, Imgur or any image host and paste the direct URL here
-              </p>
+              {token && <AdminImageUpload token={token} assetType="paymentMethod" onUploaded={qrImageUrl => setFormData(current => ({ ...current, qrImageUrl }))} />}
+              <p className="text-xs text-gray-400 mt-1">Paste a direct image link or upload the QR photo from your device, then save the form.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>

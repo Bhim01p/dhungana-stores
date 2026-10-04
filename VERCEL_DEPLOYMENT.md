@@ -59,7 +59,7 @@ Add `BACKEND_URL` and `VITE_STAFF_URL` to the frontend project's **Production** 
 
 To make `https://staff.yourdomain.com` work, you need to own `yourdomain.com`. In the same Vercel frontend project, add both the shop's domain (such as `yourdomain.com`) and the staff hostname (`staff.yourdomain.com`). Vercel will show the DNS records to enter with the domain provider. Once DNS is verified and the variables above are set, rebuild the frontend. Opening the staff hostname goes directly to staff sign-in; admin paths opened on the shop hostname forward to the staff hostname. The staff hostname is a separate entry point, while login and backend role checks continue to protect the actual admin features.
 
-Set the backend's `FRONTEND_URL` to the shop origin and `STAFF_URL` to the staff origin, then redeploy it. Customer password reset links go to the shop; staff/admin reset links go to the staff hostname. The backend allows both origins. Keep preview environments isolated from the production database unless you intentionally want preview orders and changes to affect the live store.
+Set the backend's `FRONTEND_URL` to the shop origin and `STAFF_URL` to the staff origin, then redeploy it. Customer password reset links go to the shop. Main-admin recovery links use the staff hostname; staff password resets are performed by the main admin from Staff Access. The backend allows both origins. Keep preview environments isolated from the production database unless you intentionally want preview orders and changes to affect the live store.
 
 ## How admin access works
 

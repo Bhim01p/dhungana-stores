@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { Fragment, useEffect, useState, useCallback } from "react";
 import { adminOrdersApi } from "../api/adminOrders";
 import { useAuth } from "../contexts/AuthContext";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -89,7 +89,7 @@ export default function AdminOrdersPage() {
     <div className="p-4 md:p-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
-        <p className="text-gray-500 mt-0.5">{orders.length} of {totalPages * LIMIT} orders</p>
+        <p className="text-gray-500 mt-0.5">Review orders and update their status.</p>
       </div>
 
       {error && <ErrorMessage message={error} />}
@@ -126,22 +126,19 @@ export default function AdminOrdersPage() {
             <div className="min-w-0">
               <p className="font-mono text-xs font-bold text-gray-900">{order.orderNumber}</p>
               <p className="mt-1 font-semibold text-gray-900 break-words">{order.customerName}</p>
-              <p className="text-xs text-gray-500">{order.phone}</p>
             </div>
             <p className="shrink-0 text-right font-bold text-brand-600">NPR {Number(order.total).toLocaleString("en-NP")}</p>
           </div>
-          <p className="text-xs text-gray-400">{new Date(order.createdAt).toLocaleString()}</p>
-          <div className="grid grid-cols-1 gap-3">
-            <label className="block text-xs font-semibold text-gray-600">Order status
-              <select className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold" value={order.orderStatus} onChange={e => handleStatusChange(order.id, e.target.value as OrderStatus)}>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-[11px] font-medium text-gray-500">Order status
+              <select aria-label="Order status" className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold" value={order.orderStatus} onChange={e => handleStatusChange(order.id, e.target.value as OrderStatus)}>
                 {ORDER_STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g," ")}</option>)}
               </select>
             </label>
-            <label className="block text-xs font-semibold text-gray-600">Payment status
-              <select className={`mt-1 w-full rounded-lg border border-transparent px-3 py-2.5 text-sm font-semibold ${paymentColor(order.paymentStatus)}`} value={order.paymentStatus} onChange={e => handlePaymentStatusChange(order.id, e.target.value as PaymentStatus)}>
+            <label className="block text-[11px] font-medium text-gray-500">Payment status
+              <select aria-label="Payment status" className={`rounded-lg border border-transparent px-3 py-2 text-sm font-semibold ${paymentColor(order.paymentStatus)}`} value={order.paymentStatus} onChange={e => handlePaymentStatusChange(order.id, e.target.value as PaymentStatus)}>
                 {paymentChoices(order.paymentStatus).map(s => <option key={s} value={s}>{s.replace(/_/g," ")}</option>)}
               </select>
-              {order.paymentStatus === "CONFIRMED" && <span className="mt-1 block font-normal text-gray-500">After you process the refund manually, mark it Refunded before cancelling.</span>}
             </label>
           </div>
           <button type="button" className="w-full rounded-lg border border-gray-200 py-2.5 text-sm font-semibold text-brand-600" onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}>
@@ -149,11 +146,17 @@ export default function AdminOrdersPage() {
           </button>
           {expandedOrder === order.id && <div className="border-t border-gray-100 pt-3 space-y-3 text-sm">
             <div className="space-y-1 text-gray-600">
-              <p><span className="font-semibold">Address:</span> {order.address}</p>
+              <p><span className="font-semibold">Placed:</span> {new Date(order.createdAt).toLocaleString()}</p>
+              <p><span className="font-semibold">Customer phone:</span> {order.phone}</p>
+              <p><span className="font-semibold">Fulfillment:</span> {order.fulfillmentType === "PICKUP" ? "Store pickup" : "Delivery"}</p>
+              {order.fulfillmentType !== "PICKUP" && <p><span className="font-semibold">Address:</span> {order.address}</p>}
+              {order.deliveryArea && <p><span className="font-semibold">Area:</span> {order.deliveryArea.name}</p>}
+              {order.deliveryDate && <p><span className="font-semibold">Date / time:</span> {order.deliveryDate.slice(0, 10)} · {order.deliverySlot?.label ?? "Not selected"}</p>}
               {order.landmark && <p><span className="font-semibold">Landmark:</span> {order.landmark}</p>}
               {order.email && <p className="break-all"><span className="font-semibold">Email:</span> {order.email}</p>}
               {order.notes && <p><span className="font-semibold">Notes:</span> {order.notes}</p>}
               <p><span className="font-semibold">Payment method:</span> {order.paymentMethodName ?? "Not recorded"}{order.paymentMethodAccountInfo ? ` · ${order.paymentMethodAccountInfo}` : ""}</p>
+              {order.paymentStatus === "CONFIRMED" && <p className="text-xs text-gray-500">Process any refund manually before marking it Refunded or cancelling the order.</p>}
             </div>
             <div className="space-y-2">
               {order.orderItems?.map((item: any) => <div key={item.id} className="flex justify-between gap-3 text-gray-600">
@@ -173,30 +176,27 @@ export default function AdminOrdersPage() {
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-semibold">
                 <tr>
-                  <th className="px-5 py-3">Order #</th>
-                  <th className="px-5 py-3">Customer</th>
+                  <th className="px-5 py-3">Order</th>
                   <th className="px-5 py-3 text-right">Total</th>
-                  <th className="px-5 py-3 text-center">Order Status</th>
-                  <th className="px-5 py-3 text-center">Payment Status</th>
-                  <th className="px-5 py-3 text-right">Date</th>
+                  <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3 text-center">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {orders.map((order) => (
-                  <>
-                    <tr key={order.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-3 font-mono text-xs font-bold">{order.orderNumber}</td>
+                  <Fragment key={order.id}>
+                    <tr className="hover:bg-gray-50">
                       <td className="px-5 py-3">
-                        <div className="font-medium text-gray-900">{order.customerName}</div>
-                        <div className="text-xs text-gray-400">{order.phone}</div>
+                        <div className="font-mono text-xs font-bold text-gray-900">{order.orderNumber}</div>
+                        <div className="mt-1 text-xs text-gray-500">{order.customerName}</div>
                       </td>
                       <td className="px-5 py-3 text-right font-bold text-brand-600">
                         NPR {Number(order.total).toLocaleString("en-NP")}
                       </td>
 
-                      {/* Order status — inline dropdown */}
-                      <td className="px-5 py-3 text-center">
+                      {/* Keep order and payment controls together in a compact status column. */}
+                      <td className="px-5 py-3">
+                        <div className="flex flex-col items-start gap-1.5">
                         <select
                           className="text-xs font-sans font-semibold py-1 px-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white cursor-pointer"
                           value={order.orderStatus}
@@ -206,11 +206,6 @@ export default function AdminOrdersPage() {
                             <option key={s} value={s}>{s.replace(/_/g," ")}</option>
                           ))}
                         </select>
-                        {order.paymentStatus === "CONFIRMED" && <span className="mt-1 block text-[10px] text-gray-500">Refund manually before cancellation</span>}
-                      </td>
-
-                      {/* Payment status — inline dropdown */}
-                      <td className="px-5 py-3 text-center">
                         <select
                           className={`text-xs font-sans font-semibold py-1 px-2 rounded-lg border border-transparent focus:outline-none focus:ring-2 focus:ring-brand-400 cursor-pointer ${paymentColor(order.paymentStatus)}`}
                           value={order.paymentStatus}
@@ -220,17 +215,14 @@ export default function AdminOrdersPage() {
                             <option key={s} value={s}>{s.replace(/_/g," ")}</option>
                           ))}
                         </select>
-                      </td>
-
-                      <td className="px-5 py-3 text-right text-gray-400 text-xs">
-                        {new Date(order.createdAt).toLocaleDateString()}
+                        </div>
                       </td>
                       <td className="px-5 py-3 text-center">
                         <button
                           onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
                           className="text-xs text-brand-500 hover:text-brand-700 font-semibold"
                         >
-                          {expandedOrder === order.id ? "Hide ▲" : "View ▼"}
+                          {expandedOrder === order.id ? "Hide" : "Details"}
                         </button>
                       </td>
                     </tr>
@@ -238,16 +230,22 @@ export default function AdminOrdersPage() {
                     {/* Expanded row */}
                     {expandedOrder === order.id && (
                       <tr key={`${order.id}-expanded`} className="bg-gray-50">
-                        <td colSpan={7} className="px-5 py-4">
+                        <td colSpan={4} className="px-5 py-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Delivery info */}
                             <div className="space-y-1 text-sm">
                               <p className="font-semibold text-gray-700 mb-2">Delivery Info</p>
-                              <p><span className="text-gray-500">Address:</span> {order.address}</p>
+                              <p><span className="text-gray-500">Placed:</span> {new Date(order.createdAt).toLocaleString()}</p>
+                              <p><span className="text-gray-500">Customer:</span> {order.customerName} · {order.phone}</p>
+                              <p><span className="text-gray-500">Fulfillment:</span> {order.fulfillmentType === "PICKUP" ? "Store pickup" : "Delivery"}</p>
+                              {order.fulfillmentType !== "PICKUP" && <p><span className="text-gray-500">Address:</span> {order.address}</p>}
+                              {order.deliveryArea && <p><span className="text-gray-500">Area:</span> {order.deliveryArea.name}</p>}
+                              {order.deliveryDate && <p><span className="text-gray-500">Date / time:</span> {order.deliveryDate.slice(0, 10)} · {order.deliverySlot?.label ?? "Not selected"}</p>}
                               {order.landmark && <p><span className="text-gray-500">Landmark:</span> {order.landmark}</p>}
                               {order.email && <p><span className="text-gray-500">Email:</span> {order.email}</p>}
                               {order.notes && <p><span className="text-gray-500">Notes:</span> {order.notes}</p>}
                               <p><span className="text-gray-500">Payment method:</span> {order.paymentMethodName ?? "Not recorded"}{order.paymentMethodAccountInfo ? ` · ${order.paymentMethodAccountInfo}` : ""}</p>
+                              {order.paymentStatus === "CONFIRMED" && <p className="text-xs text-gray-500">Process any refund manually before marking it Refunded or cancelling the order.</p>}
                             </div>
                             {/* Order items */}
                             {order.orderItems && order.orderItems.length > 0 && (
@@ -281,7 +279,7 @@ export default function AdminOrdersPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

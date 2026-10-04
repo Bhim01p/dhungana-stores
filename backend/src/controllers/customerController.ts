@@ -74,11 +74,39 @@ export async function getMyOrders(req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 }
 
+export async function getMyFavorites(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try { res.status(200).json(await customerService.getFavorites(req.customer!.sub)); }
+  catch (err) { next(err); }
+}
+
+export async function addMyFavorite(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try { res.status(200).json(await customerService.addFavorite(req.customer!.sub, String(req.params.productId))); }
+  catch (err) { next(err); }
+}
+
+export async function removeMyFavorite(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try { res.status(200).json(await customerService.removeFavorite(req.customer!.sub, String(req.params.productId))); }
+  catch (err) { next(err); }
+}
+
+export async function reorderMyOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try { res.status(200).json(await customerService.getReorderProducts(req.customer!.sub, String(req.params.orderId))); }
+  catch (err) { next(err); }
+}
+
 // PATCH /api/customers/me
 export async function updateMe(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { name, phone } = req.body as { name?: string; phone?: string };
-    const profile = await customerService.updateProfile(req.customer!.sub, { name, phone });
+    const { name, phone, imageUrl } = req.body as { name?: string; phone?: string; imageUrl?: string | null };
+    if (imageUrl !== undefined && imageUrl !== null) {
+      let parsed: URL;
+      try { parsed = new URL(imageUrl); } catch { res.status(400).json({ error: 'Profile photo URL is invalid.' }); return; }
+      if (parsed.protocol !== 'https:' || parsed.hostname !== 'res.cloudinary.com') {
+        res.status(400).json({ error: 'Profile photos must be uploaded through the store image uploader.' });
+        return;
+      }
+    }
+    const profile = await customerService.updateProfile(req.customer!.sub, { name, phone, imageUrl });
     res.status(200).json(profile);
   } catch (err) { next(err); }
 }
