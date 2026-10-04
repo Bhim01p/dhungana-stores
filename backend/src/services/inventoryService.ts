@@ -37,7 +37,7 @@ export const inventoryService = {
     return prisma.$transaction(async (tx) => {
       const product = await tx.product.findUnique({ where: { id: productId } });
       if (!product) throw invalid('Product not found.', 404);
-      const updated = await tx.product.updateMany({ where: { id: productId, ...(delta < 0 ? { stockQuantity: { gte: quantity } } : {}) }, data: { stockQuantity: { increment: delta } } });
+      const updated = await tx.product.updateMany({ where: { id: productId, ...(delta < 0 ? { stockQuantity: { gte: Math.abs(delta) } } : {}) }, data: { stockQuantity: { increment: delta } } });
       if (updated.count !== 1) throw invalid('There is not enough stock for that adjustment.', 409);
       const stockAfter = (await tx.product.findUniqueOrThrow({ where: { id: productId }, select: { stockQuantity: true } })).stockQuantity;
       const movement = await tx.inventoryMovement.create({ data: {

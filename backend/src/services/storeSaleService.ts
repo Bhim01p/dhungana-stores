@@ -10,8 +10,8 @@ function invalid(message: string, statusCode = 400): Error {
 }
 
 function saleNumber() {
-  const now = new Date();
-  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const now = new Date(Date.now() + 345 * 60_000);
+  const date = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}`;
   return `POS-${date}-${randomBytes(4).toString('hex').toUpperCase()}`;
 }
 
@@ -58,7 +58,7 @@ export const storeSaleService = {
     return prisma.$transaction(async (tx) => {
       const products = await tx.product.findMany({ where: { id: { in: [...quantities.keys()] }, active: true } });
       if (products.length !== quantities.size) throw invalid('One or more products are unavailable. Refresh the product list and try again.', 409);
-      let total = 0;
+      let totalCents = 0;
       const items: Array<{ productId: string; productName: string; unit: typeof products[number]['unit']; quantity: number; unitPrice: Decimal; subtotal: Decimal }> = [];
       for (const [productId, quantity] of quantities) {
         const product = products.find((entry) => entry.id === productId)!;
@@ -70,23 +70,24 @@ export const storeSaleService = {
           quantityChange: -quantity, stockAfter,
           reference: number, reason: saleKind === StoreSaleKind.HOUSE_USE ? 'Recorded as shop house use.' : 'Completed in-store sale.', actorId: cashierId,
         } });
-        const unitPrice = Number(product.price);
-        const subtotal = unitPrice * quantity;
-        total += subtotal;
-        if (!Number.isFinite(total) || total > 99_999_999.99) throw invalid('Sale total is above the supported limit.');
-        items.push({ productId, productName: product.name, unit: product.unit, quantity, unitPrice: new Decimal(unitPrice), subtotal: new Decimal(subtotal) });
+        const unitPriceCents = Math.round(Number(product.price) * 100);
+        const itemSubtotalCents = unitPriceCents * quantity;
+        totalCents += itemSubtotalCents;
+        if (!Number.isSafeInteger(totalCents) || totalCents > 9_999_999_999) throw invalid('Sale total is above the supported limit.');
+        items.push({ productId, productName: product.name, unit: product.unit, quantity, unitPrice: new Decimal(unitPriceCents).div(100), subtotal: new Decimal(itemSubtotalCents).div(100) });
       }
       const tendered = saleKind === StoreSaleKind.SALE && input.paymentType === StoreSalePaymentType.CASH ? Number(input.tenderedAmount) : null;
-      if (tendered !== null && (!Number.isFinite(tendered) || tendered < total)) throw invalid('Cash received must be at least the sale total.');
+      const tenderedCents = tendered === null ? null : Math.round(tendered * 100);
+      if (tenderedCents !== null && (!Number.isSafeInteger(tenderedCents) || tenderedCents < totalCents)) throw invalid('Cash received must be at least the sale total.');
       const sale = await tx.storeSale.create({
         data: {
           saleNumber: number, cashierId, cashierName: cashierName.slice(0, 120),
           customerName: input.customerName?.trim().slice(0, 120) || null,
           customerPhone: input.customerPhone?.trim().slice(0, 30) || null,
-          subtotal: new Decimal(total), total: new Decimal(saleKind === StoreSaleKind.SALE ? total : 0), saleKind,
+          subtotal: new Decimal(totalCents).div(100), total: new Decimal(saleKind === StoreSaleKind.SALE ? totalCents : 0).div(100), saleKind,
           paymentType: saleKind === StoreSaleKind.SALE ? input.paymentType! : null,
-          tenderedAmount: tendered === null ? null : new Decimal(tendered),
-          changeAmount: tendered === null ? null : new Decimal(tendered - total),
+          tenderedAmount: tenderedCents === null ? null : new Decimal(tenderedCents).div(100),
+          changeAmount: tenderedCents === null ? null : new Decimal(tenderedCents - totalCents).div(100),
           items: { create: items },
         }, include: { items: true },
       });
@@ -95,8 +96,10 @@ export const storeSaleService = {
     });
   },
 
-  async changeStatus(id: string, status: StoreSaleStatus, reason: string, changedBy: string, actorId?: string) {
+  async changeStatus(id: string, status: StoreSaleStatus, reason: string, changedBy: string, actorId?: string, restockRefundedItems?: boolean) {
     if (status !== StoreSaleStatus.VOIDED && status !== StoreSaleStatus.REFUNDED) throw invalid('Choose void or refunded status.');
+    if (status === StoreSaleStatus.REFUNDED && typeof restockRefundedItems !== 'boolean') throw invalid('Confirm whether refunded items were physically returned to stock.');
+    const shouldRestock = status === StoreSaleStatus.VOIDED || restockRefundedItems === true;
     const cleanReason = reason.trim().slice(0, 500);
     if (cleanReason.length < 3) throw invalid('Add a short reason for the audit record.');
     return prisma.$transaction(async (tx) => {
@@ -106,7 +109,7 @@ export const storeSaleService = {
       if (sale.saleKind === StoreSaleKind.HOUSE_USE && status === StoreSaleStatus.REFUNDED) throw invalid('House-use records can be voided, not refunded.');
       const claimed = await tx.storeSale.updateMany({ where: { id, status: StoreSaleStatus.COMPLETED }, data: { status, statusReason: cleanReason, statusChangedBy: changedBy, statusChangedAt: new Date() } });
       if (claimed.count !== 1) throw invalid('This sale changed while you were updating it. Refresh and try again.', 409);
-      for (const item of sale.items) {
+      if (shouldRestock) for (const item of sale.items) {
         if (item.productId) {
           const restored = await tx.product.update({ where: { id: item.productId }, data: { stockQuantity: { increment: item.quantity } } });
           await tx.inventoryMovement.create({ data: {
@@ -116,7 +119,7 @@ export const storeSaleService = {
           } });
         }
       }
-      await tx.adminAuditLog.create({ data: { actorId: actorId ?? null, action: status, entity: 'STORE_SALE', entityId: id, summary: `${sale.saleNumber} was marked ${status.toLowerCase()}.`, metadata: { reason: cleanReason } } });
+      await tx.adminAuditLog.create({ data: { actorId: actorId ?? null, action: status, entity: 'STORE_SALE', entityId: id, summary: `${sale.saleNumber} was marked ${status.toLowerCase()}${status === StoreSaleStatus.REFUNDED ? (shouldRestock ? ' and returned items were restocked' : ' without restocking items') : ''}.`, metadata: { reason: cleanReason, restocked: shouldRestock } } });
       return tx.storeSale.findUniqueOrThrow({ where: { id }, include: { items: true } });
     });
   },

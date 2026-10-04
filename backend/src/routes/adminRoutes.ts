@@ -26,7 +26,6 @@ import { createStoreSale, listStoreSales, searchSaleProducts, updateStoreSaleSta
 import { adjustInventory, getActivity, getInventoryOverview } from "../controllers/inventoryController";
 import { exportAdminData } from "../controllers/adminExportController";
 import { createDeliveryArea, createDeliverySlot, getAdminFulfillmentOptions, updateDeliveryArea, updateDeliverySlot } from "../controllers/fulfillmentController";
-import { closeCashDrawer, getCashDrawer } from "../controllers/cashDrawerController";
 
 const router = Router();
 
@@ -56,9 +55,6 @@ router.post("/fulfillment/areas", requireFeature('FULFILLMENT'), asyncHandler(cr
 router.patch("/fulfillment/areas/:id", requireFeature('FULFILLMENT'), asyncHandler(updateDeliveryArea));
 router.post("/fulfillment/slots", requireFeature('FULFILLMENT'), asyncHandler(createDeliverySlot));
 router.patch("/fulfillment/slots/:id", requireFeature('FULFILLMENT'), asyncHandler(updateDeliverySlot));
-router.get("/sales/cash-drawer", requireFeature('CASH_DRAWER'), asyncHandler(getCashDrawer));
-router.post("/sales/cash-drawer/close", requireFeature('CASH_DRAWER'), asyncHandler(closeCashDrawer));
-
 // In-store POS: cashiers share the product catalogue and atomically deduct stock.
 router.get("/sales/products", requireFeature('STORE_SALES'), asyncHandler(searchSaleProducts));
 router.get("/sales", requireFeature('STORE_SALES'), asyncHandler(listStoreSales));

@@ -35,7 +35,6 @@ import OrdersPage from "./pages/OrdersPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import FavoritesPage from "./pages/FavoritesPage";
 import AdminFulfillmentPage from "./pages/AdminFulfillmentPage";
-import AdminCashDrawerPage from "./pages/AdminCashDrawerPage";
 import { FavoritesProvider } from "./contexts/FavoritesContext";
 import { LanguageProvider } from "./i18n/LanguageContext";
 import { useLanguage } from "./i18n/LanguageContext";
@@ -64,9 +63,9 @@ function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
 function AdminHome() {
   const { user } = useAuth();
   if (user?.role === "ADMIN") return <Navigate to="/staff-login/desk/dashboard" replace />;
-  const first = ["ORDERS", "STORE_SALES", "CASH_DRAWER", "DASHBOARD", "PRODUCTS", "INVENTORY", "CATEGORIES", "FULFILLMENT", "MESSAGES", "PAYMENT_METHODS", "EXPORTS", "ACTIVITY"]
+  const first = ["ORDERS", "STORE_SALES", "DASHBOARD", "PRODUCTS", "INVENTORY", "CATEGORIES", "FULFILLMENT", "MESSAGES", "PAYMENT_METHODS", "EXPORTS", "ACTIVITY"]
     .find(feature => user?.permissions?.includes(feature));
-  const route = { ORDERS: "orders", STORE_SALES: "sales", CASH_DRAWER: "cash-drawer", DASHBOARD: "dashboard", PRODUCTS: "products", INVENTORY: "inventory", CATEGORIES: "categories", FULFILLMENT: "fulfillment", MESSAGES: "messages", PAYMENT_METHODS: "payment-methods", EXPORTS: "account", ACTIVITY: "activity" }[first ?? ""];
+  const route = { ORDERS: "orders", STORE_SALES: "sales", DASHBOARD: "dashboard", PRODUCTS: "products", INVENTORY: "inventory", CATEGORIES: "categories", FULFILLMENT: "fulfillment", MESSAGES: "messages", PAYMENT_METHODS: "payment-methods", EXPORTS: "account", ACTIVITY: "activity" }[first ?? ""];
   return <Navigate to={route ? `/staff-login/desk/${route}` : "/staff-login/desk/account"} replace />;
 }
 
@@ -227,7 +226,7 @@ export default function App() {
               <Route path="categories"         element={<FeatureRoute feature="CATEGORIES"><AdminCategoriesPage /></FeatureRoute>} />
               <Route path="orders"             element={<FeatureRoute feature="ORDERS"><AdminOrdersPage /></FeatureRoute>} />
               <Route path="sales"              element={<FeatureRoute feature="STORE_SALES"><AdminSalesPage /></FeatureRoute>} />
-              <Route path="cash-drawer"        element={<FeatureRoute feature="CASH_DRAWER"><AdminCashDrawerPage /></FeatureRoute>} />
+              <Route path="cash-drawer"        element={<Navigate to="/staff-login/desk/sales" replace />} />
               <Route path="fulfillment"        element={<FeatureRoute feature="FULFILLMENT"><AdminFulfillmentPage /></FeatureRoute>} />
               <Route path="messages"           element={<FeatureRoute feature="MESSAGES"><AdminMessagesPage /></FeatureRoute>} />
               <Route path="account"            element={<AdminAccountPage />} />

@@ -7,9 +7,11 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import ErrorMessage from "../components/ErrorMessage";
 import ActiveOrdersBanner from "../components/ActiveOrdersBanner";
 import { useLanguage } from "../i18n/LanguageContext";
+import { useCustomerAuth } from "../contexts/CustomerAuthContext";
 
 export default function HomePage() {
   const { t } = useLanguage();
+  const { customer } = useCustomerAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,17 +58,17 @@ export default function HomePage() {
                 🛍️ {t("Shop Now")}
               </Link>
               <Link
-                to="/profile"
+                to="/orders"
                 className="inline-flex items-center gap-2 border border-white/40 text-white font-semibold px-6 py-3 rounded-xl hover:bg-white/10 transition-colors"
               >
                 📦 {t("Track Orders")}
               </Link>
-              <Link
+              {!customer && <Link
                 to="/login"
                 className="inline-flex items-center gap-2 border border-white/40 text-white font-semibold px-6 py-3 rounded-xl hover:bg-white/10 transition-colors"
               >
                 👤 {t("Login")}
-              </Link>
+              </Link>}
             </div>
           </div>
         </div>

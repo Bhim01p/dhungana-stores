@@ -3,20 +3,33 @@ import { Prisma } from '@prisma/client';
 
 export type SalesPeriod = '7d' | '30d' | '6m' | '1y';
 
+const NEPAL_OFFSET_MS = 345 * 60_000;
+
 function dateKey(date: Date, monthly: boolean) {
-  return monthly ? date.toISOString().slice(0, 7) : date.toISOString().slice(0, 10);
+  const nepalDate = new Date(date.getTime() + NEPAL_OFFSET_MS);
+  return monthly ? nepalDate.toISOString().slice(0, 7) : nepalDate.toISOString().slice(0, 10);
 }
 
 function periodBounds(period: SalesPeriod) {
-  const now = new Date();
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
-  const start = new Date(end);
-  if (period === '7d') start.setUTCDate(start.getUTCDate() - 7);
-  else if (period === '30d') start.setUTCDate(start.getUTCDate() - 30);
-  else if (period === '6m') start.setUTCMonth(start.getUTCMonth() - 5, 1);
-  else start.setUTCMonth(start.getUTCMonth() - 11, 1);
-  if (period === '6m' || period === '1y') start.setUTCDate(1);
-  return { start, end, monthly: period === '6m' || period === '1y' };
+  // Keep calendar boundaries in Nepal local time, then convert those local
+  // midnights to UTC for filtering PostgreSQL timestamptz values.
+  const nepalNow = new Date(Date.now() + NEPAL_OFFSET_MS);
+  const today = new Date(Date.UTC(nepalNow.getUTCFullYear(), nepalNow.getUTCMonth(), nepalNow.getUTCDate()));
+  const endLocal = new Date(today);
+  endLocal.setUTCDate(endLocal.getUTCDate() + 1);
+  const startLocal = new Date(today);
+  if (period === '7d') startLocal.setUTCDate(startLocal.getUTCDate() - 6);
+  else if (period === '30d') startLocal.setUTCDate(startLocal.getUTCDate() - 29);
+  else if (period === '6m') startLocal.setUTCMonth(startLocal.getUTCMonth() - 5, 1);
+  else startLocal.setUTCMonth(startLocal.getUTCMonth() - 11, 1);
+  if (period === '6m' || period === '1y') startLocal.setUTCDate(1);
+  return {
+    start: new Date(startLocal.getTime() - NEPAL_OFFSET_MS),
+    end: new Date(endLocal.getTime() - NEPAL_OFFSET_MS),
+    startLocal,
+    endLocal,
+    monthly: period === '6m' || period === '1y',
+  };
 }
 
 export const adminStatsService = {
@@ -89,12 +102,12 @@ export const adminStatsService = {
   },
 
   async getSalesReport(period: SalesPeriod) {
-    const { start, end, monthly } = periodBounds(period);
+    const { start, end, startLocal, endLocal, monthly } = periodBounds(period);
     const grain = monthly ? 'month' : 'day';
     const format = monthly ? 'YYYY-MM' : 'YYYY-MM-DD';
     const rows = await prisma.$queryRaw<Array<{ bucket: string; revenue: string; cash: string; qr: string; transactions: string }>>(Prisma.sql`
       SELECT
-        TO_CHAR(DATE_TRUNC(${grain}, "created_at"), ${format}) AS bucket,
+        TO_CHAR(DATE_TRUNC(${grain}, "created_at" AT TIME ZONE 'Asia/Kathmandu'), ${format}) AS bucket,
         COALESCE(SUM("total"), 0)::text AS revenue,
         COALESCE(SUM("total") FILTER (WHERE "payment_type"::text = 'CASH'), 0)::text AS cash,
         COALESCE(SUM("total") FILTER (WHERE "payment_type"::text = 'QR'), 0)::text AS qr,
@@ -129,9 +142,9 @@ export const adminStatsService = {
       onlineByBucket.set(key, current);
     }
     const filled = [];
-    const cursor = new Date(start);
-    while (cursor < end) {
-      const key = dateKey(cursor, monthly);
+    const cursor = new Date(startLocal);
+    while (cursor < endLocal) {
+      const key = monthly ? cursor.toISOString().slice(0, 7) : cursor.toISOString().slice(0, 10);
       const store = buckets.get(key) ?? { revenue: 0, cash: 0, qr: 0, transactions: 0 };
       const online = onlineByBucket.get(key) ?? { revenue: 0, transactions: 0 };
       filled.push({ bucket: key, storeRevenue: store.revenue, onlineRevenue: online.revenue, revenue: store.revenue + online.revenue, cash: store.cash, qr: store.qr, transactions: store.transactions + online.transactions });

@@ -30,8 +30,8 @@ export interface CreateOrderInput {
 
 // ─── Helpers ──────────────────────────────────
 function generateOrderNumber(): string {
-  const now = new Date();
-  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const now = new Date(Date.now() + 345 * 60 * 1000);
+  const date = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}`;
   return `BD-${date}-${randomBytes(8).toString('hex').toUpperCase()}`;
 }
 
@@ -65,6 +65,9 @@ export const orderService = {
       throw Object.assign(new Error('Choose a date and time slot.'), { statusCode: 400 });
     }
     const chosenDate = new Date(`${dateText}T00:00:00.000Z`);
+    if (Number.isNaN(chosenDate.getTime()) || chosenDate.toISOString().slice(0, 10) !== dateText) {
+      throw Object.assign(new Error('Choose a valid delivery date.'), { statusCode: 400 });
+    }
     const nepaliToday = new Date(Date.now() + 345 * 60 * 1000);
     const todayText = `${nepaliToday.getUTCFullYear()}-${String(nepaliToday.getUTCMonth() + 1).padStart(2, '0')}-${String(nepaliToday.getUTCDate()).padStart(2, '0')}`;
     const todayDate = new Date(`${todayText}T00:00:00.000Z`);
@@ -117,7 +120,7 @@ export const orderService = {
       if (products.length !== orderItems.length) {
         throw Object.assign(new Error('One or more products are unavailable.'), { statusCode: 400 });
       }
-      let subtotal = 0;
+      let subtotalCents = 0;
       const orderItemsData = [] as Array<{
         productId: string; productName: string; unit: typeof products[number]['unit'];
         quantity: number; unitPrice: Decimal; subtotal: Decimal;
@@ -137,18 +140,23 @@ export const orderService = {
           quantityChange: -item.quantity, stockAfter,
           reference: orderNumber, reason: 'Stock reserved for an online order.',
         } });
-        const unitPrice = Number(product.price);
-        const itemSubtotal = unitPrice * item.quantity;
-        subtotal += itemSubtotal;
-        if (!Number.isFinite(subtotal) || subtotal > 99_999_999.99) {
+        const unitPriceCents = Math.round(Number(product.price) * 100);
+        const itemSubtotalCents = unitPriceCents * item.quantity;
+        subtotalCents += itemSubtotalCents;
+        if (!Number.isSafeInteger(subtotalCents) || subtotalCents > 9_999_999_999) {
           throw Object.assign(new Error('Order total is above the supported limit.'), { statusCode: 400 });
         }
         orderItemsData.push({ productId: product.id, productName: product.name, unit: product.unit,
-          quantity: item.quantity, unitPrice: new Decimal(unitPrice), subtotal: new Decimal(itemSubtotal) });
+          quantity: item.quantity, unitPrice: new Decimal(unitPriceCents).div(100), subtotal: new Decimal(itemSubtotalCents).div(100) });
       }
+      const subtotal = subtotalCents / 100;
       const deliveryCharge = fulfillmentType === OrderFulfillmentType.PICKUP ? 0
         : subtotal >= Number(area!.freeDeliveryThreshold) ? 0 : Number(area!.deliveryCharge ?? DELIVERY_CHARGE);
-      const total = subtotal + deliveryCharge;
+      const deliveryChargeCents = Math.round(deliveryCharge * 100);
+      const totalCents = subtotalCents + deliveryChargeCents;
+      if (!Number.isSafeInteger(deliveryChargeCents) || !Number.isSafeInteger(totalCents) || totalCents > 9_999_999_999) {
+        throw Object.assign(new Error('Order total is above the supported limit.'), { statusCode: 400 });
+      }
       return tx.order.create({
         data: {
           orderNumber,
@@ -162,9 +170,9 @@ export const orderService = {
           deliverySlotId: slot.id,
           landmark: input.landmark?.trim() || null,
           notes: input.notes?.trim() || null,
-          subtotal: new Decimal(subtotal),
-          deliveryCharge: new Decimal(deliveryCharge),
-          total: new Decimal(total),
+          subtotal: new Decimal(subtotalCents).div(100),
+          deliveryCharge: new Decimal(deliveryChargeCents).div(100),
+          total: new Decimal(totalCents).div(100),
           paymentMethodName: paymentMethod?.name ?? null,
           paymentMethodQrImageUrl: paymentMethod?.qrImageUrl ?? null,
           paymentMethodAccountInfo: paymentMethod?.accountInfo ?? null,

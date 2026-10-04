@@ -29,7 +29,7 @@ export default function AdminSalesPage() {
   const [products, setProducts] = useState<StoreSaleProduct[]>([]);
   const [sales, setSales] = useState<StoreSale[]>([]);
   const [selected, setSelected] = useState<StoreSale | null>(null);
-  const [cart, setCart] = useState<Record<string, number>>({});
+  const [cart, setCart] = useState<Record<string, { product: StoreSaleProduct; quantity: number }>>({});
   const [search, setSearch] = useState('');
   const [historySearch, setHistorySearch] = useState('');
   const [paymentType, setPaymentType] = useState<'CASH' | 'QR'>('CASH');
@@ -42,18 +42,33 @@ export default function AdminSalesPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const loadProducts = async (term: string) => { if (!token) return; try { setProducts(await storeSalesApi.products(token, term)); } catch (e) { setError((e as Error).message); } };
+  const loadProducts = async (term: string) => {
+    if (!token) return;
+    try {
+      const results = await storeSalesApi.products(token, term);
+      setProducts(results);
+      setCart(current => {
+        const next = { ...current };
+        for (const product of results) {
+          const line = next[product.id];
+          if (line) next[product.id] = { ...line, product };
+        }
+        return next;
+      });
+    } catch (e) { setError((e as Error).message); }
+  };
   const loadSales = async (term = historySearch) => { if (!token) return; try { const result = await storeSalesApi.list(token, term); setSales(result.data); } catch (e) { setError((e as Error).message); } finally { setLoading(false); } };
   useEffect(() => { void loadProducts(''); void loadSales(''); }, [token]);
   useEffect(() => { const timer = window.setTimeout(() => void loadProducts(search), 220); return () => window.clearTimeout(timer); }, [search, token]);
-  const cartProducts = useMemo(() => Object.entries(cart).map(([id, quantity]) => ({ product: products.find(item => item.id === id), quantity })).filter((item): item is { product: StoreSaleProduct; quantity: number } => Boolean(item.product)), [cart, products]);
-  const total = cartProducts.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0);
+  const cartProducts = useMemo(() => Object.values(cart), [cart]);
+  const totalCents = cartProducts.reduce((sum, item) => sum + Math.round(Number(item.product.price) * 100) * item.quantity, 0);
+  const total = totalCents / 100;
   const cashValue = Number(tendered || 0);
 
   const changeQty = (product: StoreSaleProduct, delta: number) => setCart(current => {
     const next = { ...current };
-    const quantity = (next[product.id] ?? 0) + delta;
-    if (quantity <= 0) delete next[product.id]; else next[product.id] = Math.min(quantity, product.stockQuantity);
+    const quantity = (next[product.id]?.quantity ?? 0) + delta;
+    if (quantity <= 0) delete next[product.id]; else next[product.id] = { product, quantity: Math.min(quantity, product.stockQuantity) };
     return next;
   });
 
@@ -69,10 +84,18 @@ export default function AdminSalesPage() {
   };
 
   const changeStatus = async (sale: StoreSale, status: 'VOIDED' | 'REFUNDED') => {
+    let restockRefundedItems: boolean | undefined;
+    if (status === 'REFUNDED') {
+      const decision = window.prompt('Were the refunded items physically returned and put back into stock? Type YES or NO. Cancel keeps the sale unchanged.');
+      if (decision === null) return;
+      const normalizedDecision = decision.trim().toLowerCase();
+      if (normalizedDecision !== 'yes' && normalizedDecision !== 'no') { window.alert('Please type YES or NO. The sale was not changed.'); return; }
+      restockRefundedItems = normalizedDecision === 'yes';
+    }
     const reason = window.prompt(`Reason for ${status.toLowerCase()} this sale:`);
     if (!reason || !token) return;
     setBusy(true); setError('');
-    try { const updated = await storeSalesApi.changeStatus(token, sale.id, status, reason); setSales(current => current.map(item => item.id === updated.id ? updated : item)); if (selected?.id === updated.id) setSelected(updated); setNotice(`${sale.saleNumber} marked ${status.toLowerCase()}; stock returned to inventory.`); await loadProducts(search); }
+    try { const updated = await storeSalesApi.changeStatus(token, sale.id, status, reason, restockRefundedItems); setSales(current => current.map(item => item.id === updated.id ? updated : item)); if (selected?.id === updated.id) setSelected(updated); setNotice(`${sale.saleNumber} marked ${status.toLowerCase()}${status === 'REFUNDED' && !restockRefundedItems ? '; inventory was not changed.' : '; stock returned to inventory.'}`); await loadProducts(search); }
     catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   };
@@ -84,12 +107,12 @@ export default function AdminSalesPage() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,.8fr)]">
         <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm md:p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-stone-900">Products</h2><p className="text-sm text-stone-500">Search by product name and add to the bill.</p></div><label className="relative min-w-[220px] flex-1 sm:max-w-sm"><span className="sr-only">Search products</span><span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">⌕</span><input className="w-full rounded-xl border border-stone-300 bg-stone-50 py-2.5 pl-9 pr-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" value={search} onChange={e => setSearch(e.target.value)} placeholder="Find a product…" /></label></div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{products.map(product => { const inCart = cart[product.id] ?? 0; return <article key={product.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-stone-200 p-3 hover:border-brand-300 hover:shadow-sm"><div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-stone-100">{(product.image || product.images?.[0]) ? <img src={product.image || product.images[0]} alt="" className="h-full w-full object-cover"/> : <span className="text-2xl">🛍️</span>}</div><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-semibold text-stone-900">{product.name}</h3><p className="text-sm font-bold text-brand-700">{money(product.price)} <span className="font-normal text-stone-500">/ {product.unit}</span></p><p className={`text-xs ${product.stockQuantity <= 5 ? 'text-amber-700' : 'text-stone-500'}`}>Stock {product.stockQuantity}</p></div><button disabled={product.stockQuantity <= inCart} onClick={() => changeQty(product, 1)} aria-label={`Add ${product.name}`} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-600 text-lg font-bold text-white hover:bg-brand-700 disabled:bg-stone-300">{inCart ? `+${inCart}` : '+'}</button></article>; })}</div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{products.map(product => { const inCart = cart[product.id]?.quantity ?? 0; return <article key={product.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-stone-200 p-3 hover:border-brand-300 hover:shadow-sm"><div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-stone-100">{(product.image || product.images?.[0]) ? <img src={product.image || product.images[0]} alt="" className="h-full w-full object-cover"/> : <span className="text-2xl">🛍️</span>}</div><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-semibold text-stone-900">{product.name}</h3><p className="text-sm font-bold text-brand-700">{money(product.price)} <span className="font-normal text-stone-500">/ {product.unit}</span></p><p className={`text-xs ${product.stockQuantity <= 5 ? 'text-amber-700' : 'text-stone-500'}`}>Stock {product.stockQuantity}</p></div><button disabled={product.stockQuantity <= inCart} onClick={() => changeQty(product, 1)} aria-label={`Add ${product.name}`} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-600 text-lg font-bold text-white hover:bg-brand-700 disabled:bg-stone-300">{inCart ? `+${inCart}` : '+'}</button></article>; })}</div>
           {products.length === 0 && <p className="py-12 text-center text-sm text-stone-500">No matching active products with available stock.</p>}
         </section>
         <section className="h-fit rounded-2xl border border-stone-200 bg-white p-4 shadow-sm md:sticky md:top-5 md:p-5">
           <div className="flex items-center justify-between"><div><h2 className="text-lg font-bold text-stone-900">Current bill</h2><p className="text-sm text-stone-500">{cartProducts.length} product types</p></div><button onClick={() => setCart({})} disabled={!cartProducts.length} className="text-sm font-semibold text-stone-500 hover:text-red-700 disabled:opacity-40">Clear</button></div>
-          <div className="my-4 max-h-64 space-y-3 overflow-y-auto border-y border-dashed border-stone-200 py-3">{cartProducts.map(({ product, quantity }) => <div key={product.id} className="flex items-center gap-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{product.name}</p><p className="text-xs text-stone-500">{money(product.price)} / {product.unit}</p></div><div className="flex items-center gap-2"><button className="h-8 w-8 rounded-lg border border-stone-300" onClick={() => changeQty(product, -1)} aria-label={`Remove one ${product.name}`}>−</button><span className="w-5 text-center text-sm font-semibold">{quantity}</span><button className="h-8 w-8 rounded-lg border border-stone-300" onClick={() => changeQty(product, 1)} disabled={quantity >= product.stockQuantity} aria-label={`Add one ${product.name}`}>+</button></div><strong className="w-20 text-right text-sm">{money(Number(product.price) * quantity)}</strong></div>)}</div>
+          <div className="my-4 max-h-64 space-y-3 overflow-y-auto border-y border-dashed border-stone-200 py-3">{cartProducts.map(({ product, quantity }) => <div key={product.id} className="flex items-center gap-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{product.name}</p><p className="text-xs text-stone-500">{money(product.price)} / {product.unit}</p></div><div className="flex items-center gap-2"><button className="h-8 w-8 rounded-lg border border-stone-300" onClick={() => changeQty(product, -1)} aria-label={`Remove one ${product.name}`}>−</button><span className="w-5 text-center text-sm font-semibold">{quantity}</span><button className="h-8 w-8 rounded-lg border border-stone-300" onClick={() => changeQty(product, 1)} disabled={quantity >= product.stockQuantity} aria-label={`Add one ${product.name}`}>+</button></div><strong className="w-20 text-right text-sm">{money(Math.round(Number(product.price) * 100) * quantity / 100)}</strong></div>)}</div>
           <div className="space-y-3"><fieldset><legend className="mb-2 text-sm font-semibold text-stone-700">Transaction type</legend><div className="grid grid-cols-2 gap-2">{([{value:'SALE',label:'🧾 Customer sale'},{value:'HOUSE_USE',label:'🏠 House use'}] as const).map(option => <button key={option.value} type="button" onClick={() => setSaleKind(option.value)} className={`rounded-xl border px-3 py-2.5 text-sm font-semibold ${saleKind === option.value ? 'border-brand-600 bg-brand-50 text-brand-800 ring-1 ring-brand-500' : 'border-stone-300 text-stone-600'}`}>{option.label}</button>)}</div></fieldset>
           {saleKind === 'HOUSE_USE' ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">House use reduces inventory and records the product value separately. It is not counted as sales income.</p> : <><label className="block text-sm font-medium text-stone-700">Customer name <span className="font-normal text-stone-400">(optional)</span><input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2" value={customerName} onChange={e => setCustomerName(e.target.value)} maxLength={120} placeholder="Walk-in customer"/></label><label className="block text-sm font-medium text-stone-700">Phone <span className="font-normal text-stone-400">(optional)</span><input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} maxLength={30} placeholder="98…"/></label>
           <fieldset><legend className="mb-2 text-sm font-semibold text-stone-700">Payment method</legend><div className="grid grid-cols-2 gap-2">{(['CASH','QR'] as const).map(method => <button key={method} type="button" onClick={() => setPaymentType(method)} className={`rounded-xl border px-3 py-2.5 text-sm font-semibold ${paymentType === method ? 'border-brand-600 bg-brand-50 text-brand-800 ring-1 ring-brand-500' : 'border-stone-300 text-stone-600'}`}>{method === 'CASH' ? '💵 Cash' : '▦ QR paid'}</button>)}</div></fieldset>

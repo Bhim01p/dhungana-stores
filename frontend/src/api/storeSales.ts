@@ -14,7 +14,7 @@ export const storeSalesApi = {
   products: (token: string, search = '') => adminClient.get<StoreSaleProduct[]>(`/admin/sales/products${search ? `?search=${encodeURIComponent(search)}` : ''}`, token),
   list: (token: string, search = '') => adminClient.get<PaginatedResponse<StoreSale>>(`/admin/sales?limit=30${search ? `&search=${encodeURIComponent(search)}` : ''}`, token),
   create: (token: string, data: { items: Array<{ productId: string; quantity: number }>; saleKind: StoreSaleKind; paymentType?: StoreSalePaymentType; tenderedAmount?: number; customerName?: string; customerPhone?: string }) => adminClient.post<StoreSale>('/admin/sales', data, token),
-  changeStatus: (token: string, id: string, status: 'VOIDED' | 'REFUNDED', reason: string) => adminClient.patch<StoreSale>(`/admin/sales/${id}/status`, { status, reason }, token),
+  changeStatus: (token: string, id: string, status: 'VOIDED' | 'REFUNDED', reason: string, restockRefundedItems?: boolean) => adminClient.patch<StoreSale>(`/admin/sales/${id}/status`, { status, reason, ...(restockRefundedItems === undefined ? {} : { restockRefundedItems }) }, token),
   cashDrawer: (token: string, date: string) => adminClient.get<CashDrawerSummary>(`/admin/sales/cash-drawer?date=${encodeURIComponent(date)}`, token),
   closeCashDrawer: (token: string, data: { businessDate: string; openingCash: number; countedCash: number; paidIn: number; paidOut: number; notes?: string }) => adminClient.post<CashDrawerClosing>('/admin/sales/cash-drawer/close', data, token),
 };

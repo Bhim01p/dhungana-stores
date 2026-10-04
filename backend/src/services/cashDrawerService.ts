@@ -22,7 +22,11 @@ async function totalsFor(date: string): Promise<Totals> {
     const amount = Number(sale.total);
     const soldThatDay = sale.createdAt >= start && sale.createdAt < end;
     const adjustmentThatDay = sale.statusChangedAt !== null && sale.statusChangedAt >= start && sale.statusChangedAt < end;
-    if (soldThatDay && sale.status === 'COMPLETED' && sale.paymentType === 'CASH') totals.cashSales += amount;
+    // Count the original cash received on the day of sale even if it was later
+    // refunded or voided. The adjustment is deducted on statusChangedAt below.
+    // Otherwise a same-day refund/void is subtracted without its original sale,
+    // making the expected drawer balance too low.
+    if (soldThatDay && sale.paymentType === 'CASH') totals.cashSales += amount;
     if (soldThatDay && sale.status === 'COMPLETED' && sale.paymentType === 'QR') totals.qrSales += amount;
     if (adjustmentThatDay && sale.status === 'REFUNDED' && sale.paymentType === 'CASH') totals.cashRefunds += amount;
     if (adjustmentThatDay && sale.status === 'VOIDED' && sale.paymentType === 'CASH') totals.cashVoids += amount;

@@ -20,11 +20,11 @@ export async function createStoreSale(req: Request, res: Response) {
 }
 
 export async function updateStoreSaleStatus(req: Request, res: Response) {
-  const { status, reason } = req.body as { status?: string; reason?: string };
+  const { status, reason, restockRefundedItems } = req.body as { status?: string; reason?: string; restockRefundedItems?: boolean };
   if (!Object.values(StoreSaleStatus).includes(status as StoreSaleStatus) || typeof reason !== 'string') {
     res.status(400).json({ error: 'Provide a valid status and an audit reason.' });
     return;
   }
-  const sale = await storeSaleService.changeStatus(String(req.params.id), status as StoreSaleStatus, reason, req.admin!.username, req.admin!.sub);
+  const sale = await storeSaleService.changeStatus(String(req.params.id), status as StoreSaleStatus, reason, req.admin!.username, req.admin!.sub, restockRefundedItems);
   res.json(sale);
 }

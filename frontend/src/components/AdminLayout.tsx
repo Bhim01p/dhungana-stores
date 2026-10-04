@@ -11,7 +11,6 @@ const sidebarItems = [
   { to: "/staff-login/desk/categories", label: "Categories", icon: "📂", feature: "CATEGORIES" },
   { to: "/staff-login/desk/orders", label: "Orders", icon: "📦", feature: "ORDERS" },
   { to: "/staff-login/desk/sales", label: "Store Sales", icon: "🧾", feature: "STORE_SALES" },
-  { to: "/staff-login/desk/cash-drawer", label: "Cash Drawer Close", icon: "💵", feature: "CASH_DRAWER" },
   { to: "/staff-login/desk/fulfillment", label: "Delivery & Pickup", icon: "🚚", feature: "FULFILLMENT" },
   { to: "/staff-login/desk/messages", label: "Help & Feedback", icon: "💬", feature: "MESSAGES" },
   { to: "/staff-login/desk/account", label: "My Account", icon: "🔐", feature: "ACCOUNT" },
